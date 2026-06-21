@@ -9,6 +9,10 @@ ENV UV_SYSTEM_PYTHON=1
 
 WORKDIR /app
 
+# Diretório para persistência de dados (SQLite)
+RUN mkdir -p /app/data \
+    && chmod 0775 /app/data
+
 # Instala dependências do sistema necessárias
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential gcc libpq-dev \

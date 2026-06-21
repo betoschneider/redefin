@@ -82,3 +82,29 @@ Para rodar os testes:
 ```bash
 uv run python -m backend.tests.test_auth_csv
 ```
+
+## 🐳 Docker / Produção
+
+Para rodar a aplicação via Docker e garantir que o banco SQLite seja persistido entre recriações do container, siga:
+
+1. Crie a pasta de dados no host (se ainda não existir):
+```bash
+mkdir -p ./data
+chmod 775 ./data
+```
+
+2. Suba o container com Compose (rebuild quando necessário):
+```bash
+docker compose down --rmi local
+docker compose up --build -d
+```
+
+3. O arquivo SQLite ficará em `./data/controle_financeiro.db` no host. As migrations do Alembic também apontam para esse arquivo por padrão.
+
+Hot-reload do frontend dentro do container
+- Para desenvolvimento rápido (editar arquivos do `frontend` e ver as mudanças imediatamente no container), o `docker-compose.yml` já monta `./frontend` no caminho `/app/frontend` dentro do container (montagem em modo somente leitura). Assim, atualizações dos arquivos estáticos do host passam a aparecer sem rebuild da imagem.
+
+Observações:
+- Em produção, é recomendado servir os arquivos estáticos via um servidor web (nginx) ou CDN; a montagem direta é adequada para desenvolvimento e staging.
+- Se não estiver vendo mudanças no navegador após editar arquivos no `frontend`, limpe o cache do navegador (Ctrl+F5) e verifique se não há proxies/CDNs em frente ao container.
+

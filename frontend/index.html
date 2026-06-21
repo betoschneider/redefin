@@ -12,7 +12,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="css/style.css">
+    <!-- Versão dos assets para cache-busting: incremente manualmente ao deploy (ex: v1 -> v2) -->
+    <link rel="stylesheet" href="css/style.css?v=2">
 </head>
 <body>
     <!-- Overlay de Loading -->
@@ -306,7 +307,8 @@
     </div>
 
     <!-- Scripts da Aplicação -->
-    <script src="js/charts.js"></script>
-    <script src="js/app.js"></script>
+    <!-- Versão dos assets para forçar refresh quando necessário -->
+    <script src="js/charts.js?v=2"></script>
+    <script src="js/app.js?v=2"></script>
 </body>
 </html>

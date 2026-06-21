@@ -108,3 +108,7 @@ Observações:
 - Em produção, é recomendado servir os arquivos estáticos via um servidor web (nginx) ou CDN; a montagem direta é adequada para desenvolvimento e staging.
 - Se não estiver vendo mudanças no navegador após editar arquivos no `frontend`, limpe o cache do navegador (Ctrl+F5) e verifique se não há proxies/CDNs em frente ao container.
 
+Cache do frontend / Forçar atualização
+- Navegadores podem manter em cache os arquivos estáticos. Para forçar clientes a baixarem a nova versão ao deploy, usamos uma técnica simples de "cache-busting": adicionamos um parâmetro de versão nas referências aos assets (ex: `css/style.css?v=2`).
+- Ao atualizar o frontend em produção, incremente manualmente esse sufixo em `frontend/index.html` (`?v=2` → `?v=3`) ou automatize esse passo no pipeline de build para evitar que usuários vejam versões antigas.
+

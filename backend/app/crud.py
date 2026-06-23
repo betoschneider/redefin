@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from . import models, schemas
 from typing import List, Optional
+from datetime import datetime
 
 def get_transacoes_por_ano(db: Session, ano: int, username: Optional[str]) -> List[models.Transacao]:
     """Retorna todas as transações de um ano específico para o usuário fornecido."""
@@ -88,6 +89,39 @@ def verify_password(password: str, hashed: str) -> bool:
 
 def get_user_by_username(db: Session, username: str) -> Optional[models.User]:
     return db.query(models.User).filter(models.User.username == username).first()
+
+
+def count_users(db: Session) -> int:
+    return db.query(models.User).count()
+
+
+def create_user_google(db: Session, username: str) -> models.User:
+    """Cria um usuário para login via OAuth (gera senha e totp_secret aleatórios)."""
+    import pyotp
+    import bcrypt
+    # Create a random password hash so field is populated (user won't use it)
+    random_pw = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(random_pw, bcrypt.gensalt()).decode('utf-8')
+    totp_secret = pyotp.random_base32()
+    db_user = models.User(
+        username=username.strip(),
+        password_hash=hashed,
+        totp_secret=totp_secret
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+
+def create_audit_log(db: Session, user: Optional[models.User], action: str, detail: Optional[str] = None):
+    """Insere um registro de auditoria simples."""
+    timestamp = datetime.utcnow().isoformat()
+    user_id = user.id if user else None
+    log = models.AuditLog(timestamp=timestamp, user_id=user_id, action=action, detail=detail)
+    db.add(log)
+    db.commit()
+    return log
 
 def create_user(db: Session, user_in: schemas.UserCreate) -> models.User:
     hashed = hash_password(user_in.password)

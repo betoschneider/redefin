@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Google OAuth Client ID -->
+    <meta name="google-client-id" content="796797603259-gi07j7mmpdoo0fau7s6nnaqb8kk54pqf.apps.googleusercontent.com">
     <title>Controle Financeiro 📊</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -43,6 +45,7 @@
                 </div>
                 <div class="modal-footer">
                     <button id="btn-login-next" class="btn btn-primary btn-block">Avançar</button>
+                    <button id="btn-google-login" class="btn btn-secondary" style="margin-top:8px;"> <i class="fa-brands fa-google"></i> Entrar com Google</button>
                     <div class="auth-links">
                         <a href="#" id="link-go-register">Criar Conta</a>
                         <span style="color: var(--text-muted)">|</span>
@@ -198,6 +201,7 @@
                 <div class="metric-info">
                     <span class="metric-label" id="label-saldo-projetado">Saldo Projetado</span>
                     <h2 class="metric-value" id="val-saldo-projetado">R$ 0,00</h2>
+                    <span id="val-saldo-projetado-delta" class="metric-delta" title=""></span>
                 </div>
             </div>
         </section>

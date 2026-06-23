@@ -193,6 +193,10 @@ function configurarEventListeners() {
 
     btnLogout.addEventListener("click", realizarLogout);
 
+    // Google OAuth button (popup flow)
+    const btnGoogle = document.getElementById('btn-google-login');
+    if (btnGoogle) btnGoogle.addEventListener('click', iniciarLoginGoogle);
+
     // Configuração de abas
     const tabBtns = document.querySelectorAll(".tab-btn");
     tabBtns.forEach(btn => {
@@ -208,6 +212,59 @@ function configurarEventListeners() {
             renderizarTabelas();
         });
     });
+}
+
+// Inicia fluxo de login com Google: abre popup que redireciona para Google OAuth e recebe id_token via postMessage
+function iniciarLoginGoogle() {
+    const meta = document.querySelector('meta[name="google-client-id"]');
+    const clientId = meta ? meta.getAttribute('content') : '';
+    if (!clientId) {
+        alert('Google Client ID não configurado. Adicione uma meta tag name="google-client-id" no HTML.');
+        return;
+    }
+
+    const redirect = `${window.location.origin}/google_oauth_callback.html`;
+    const nonce = Math.random().toString(36).slice(2);
+    const scope = encodeURIComponent('openid email profile');
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&response_type=id_token&redirect_uri=${encodeURIComponent(redirect)}&scope=${scope}&nonce=${nonce}`;
+
+    const w = window.open(authUrl, 'google_oauth', 'width=600,height=700');
+
+    function onMessage(e) {
+        if (e.origin !== window.location.origin) return;
+        const data = e.data || {};
+        if (data.type === 'google-id-token' && data.id_token) {
+            window.removeEventListener('message', onMessage);
+            if (w) try { w.close(); } catch(e){}
+            autenticarViaGoogle(data.id_token);
+        }
+    }
+
+    window.addEventListener('message', onMessage);
+}
+
+async function autenticarViaGoogle(id_token) {
+    exibirLoading(true);
+    try {
+        const resp = await fetch('/api/auth/login/google', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id_token })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            // Assume backend set cookie; close modal and reload data
+            authModal.classList.remove('active');
+            carregarDadosDoAno();
+        } else {
+            alert(data.detail || 'Falha no login via Google.');
+        }
+    } catch (e) {
+        console.error('Erro OAuth Google', e);
+        alert('Erro de conexão no login via Google.');
+    } finally {
+        exibirLoading(false);
+    }
 }
 
 // Utilitários de Cookies
@@ -933,11 +990,12 @@ function propagarValores() {
 // Atualiza os painéis de métrica (Saldo Atual e Saldo Projetado)
 function atualizarMetricas() {
     const mesAtualNome = MESES_MAPA[new Date().getMonth() + 1];
-    const mesAlvo = mesFiltrado === "Ano Completo" ? mesAtualNome : mesFiltrado;
+    const isAnoCompleto = mesFiltrado === "Ano Completo";
+    const mesAlvo = isAnoCompleto ? mesAtualNome : mesFiltrado;
     const numMesAlvo = MAPA_REVERSO_MES[mesAlvo];
 
-    document.getElementById("label-saldo-atual").textContent = `${mesAlvo}: Saldo Efetivado`;
-    document.getElementById("label-saldo-projetado").textContent = `${mesAlvo}: Saldo Projetado`;
+    document.getElementById("label-saldo-atual").textContent = `${isAnoCompleto ? 'Mês atual' : mesAlvo}: Saldo Efetivado`;
+    document.getElementById("label-saldo-projetado").textContent = `${isAnoCompleto ? 'Mês atual' : mesAlvo}: Saldo Projetado`;
 
     let totalReceitaAtual = 0;
     let totalNaoReceitaAtual = 0;
@@ -951,21 +1009,13 @@ function atualizarMetricas() {
         const pago = boolValue(dadosMes.pago);
         const tipo = row.tipo.trim().toLowerCase();
 
-        // 1. Saldo Efetivado (Apenas pagos)
         if (pago) {
-            if (tipo === "receita") {
-                totalReceitaAtual += valor;
-            } else {
-                totalNaoReceitaAtual += valor;
-            }
+            if (tipo === "receita") totalReceitaAtual += valor;
+            else totalNaoReceitaAtual += valor;
         }
 
-        // 2. Saldo Projetado (Independe se foi pago ou não)
-        if (tipo === "receita") {
-            totalReceitaProjetado += valor;
-        } else {
-            totalNaoReceitaProjetado += valor;
-        }
+        if (tipo === "receita") totalReceitaProjetado += valor;
+        else totalNaoReceitaProjetado += valor;
     });
 
     const saldoAtual = totalReceitaAtual - totalNaoReceitaAtual;
@@ -978,9 +1028,48 @@ function atualizarMetricas() {
     valAtualEl.textContent = formatarMoeda(saldoAtual);
     valProjEl.textContent = formatarMoeda(saldoProjetado);
 
-    // Ajusta classes baseadas no valor para feedback visual (verde para positivo, vermelho para negativo)
     ajustarCorMetrica(valAtualEl, saldoAtual);
     ajustarCorMetrica(valProjEl, saldoProjetado);
+
+    // Exibe comparação percentual do Saldo Projetado vs mês anterior quando "Ano Completo"
+    const deltaEl = document.getElementById('val-saldo-projetado-delta');
+    if (isAnoCompleto && deltaEl) {
+        let numMesPrev = numMesAlvo - 1;
+        if (numMesPrev < 1) numMesPrev = 12;
+
+        let prevReceita = 0;
+        let prevNaoReceita = 0;
+        dadosPivotados.forEach(row => {
+            const dadosPrev = row.meses[numMesPrev] || { valor: 0.0, pago: false };
+            const v = parseFloat(dadosPrev.valor) || 0.0;
+            const tipo = row.tipo.trim().toLowerCase();
+            if (tipo === 'receita') prevReceita += v;
+            else prevNaoReceita += v;
+        });
+
+        const prevProjetado = prevReceita - prevNaoReceita;
+
+        let percent = null;
+        if (Math.abs(prevProjetado) > 0.0001) {
+            percent = ((saldoProjetado - prevProjetado) / Math.abs(prevProjetado)) * 100;
+        }
+
+        if (percent === null) {
+            deltaEl.textContent = '—';
+            deltaEl.title = `Comparado ao saldo efetivado do mês anterior: ${formatarMoeda(prevProjetado)}`;
+            deltaEl.classList.remove('positive', 'negative');
+        } else {
+            const signCls = percent >= 0 ? 'positive' : 'negative';
+            deltaEl.textContent = `${percent >= 0 ? '+' : ''}${percent.toFixed(1)}%`;
+            deltaEl.title = `Comparado ao saldo efetivado do mês anterior: ${formatarMoeda(prevProjetado)}\nAtual: ${formatarMoeda(saldoProjetado)} • Diferença: ${percent >= 0 ? '+' : ''}${percent.toFixed(1)}%`;
+            deltaEl.classList.remove('positive', 'negative');
+            deltaEl.classList.add(signCls);
+        }
+    } else if (deltaEl) {
+        deltaEl.textContent = '';
+        deltaEl.title = '';
+        deltaEl.classList.remove('positive', 'negative');
+    }
 }
 
 function ajustarCorMetrica(elemento, valor) {

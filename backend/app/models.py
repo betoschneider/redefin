@@ -23,3 +23,13 @@ class User(Base):
     totp_secret = Column(String, nullable=False)
 
 
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(String, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    action = Column(String, nullable=False)
+    detail = Column(String, nullable=True)
+
+

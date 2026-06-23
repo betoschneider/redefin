@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 import pyotp
+import requests
 
 from . import models, schemas, crud
 from .database import engine, get_db
@@ -62,7 +63,18 @@ def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Nome de usuário já cadastrado."
         )
+    # Verifica cota de novas contas (se definida)
+    try:
+        quota = int(os.getenv('ACCOUNT_QUOTA', '0'))
+    except Exception:
+        quota = 0
+    if quota > 0:
+        total = crud.count_users(db)
+        if total >= quota:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Limite de contas atingido.")
+
     user = crud.create_user(db, user_in)
+    crud.create_audit_log(db, user, 'register', f'Usuário registrado: {user.username}')
     totp = pyotp.TOTP(user.totp_secret)
     totp_uri = totp.provisioning_uri(name=user.username, issuer_name="ControleFinanceiro")
     return schemas.UserResponse(
@@ -81,6 +93,7 @@ def login_step1(auth_req: schemas.LoginStep1Request, db: Session = Depends(get_d
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuário ou senha incorretos."
         )
+    crud.create_audit_log(db, user, 'login_step1', f'Login etapa1 para {user.username}')
     return {
         "success": True,
         "message": "Senha válida. Prossiga para a autenticação em duas etapas."
@@ -116,7 +129,8 @@ def login_step2(auth_req: schemas.LoginStep2Request, response: Response, db: Ses
         samesite="lax",
         path="/"
     )
-    
+    crud.create_audit_log(db, user, 'login', f'Login completo para {user.username} (2FA)')
+
     return {
         "success": True,
         "message": "Autenticado com sucesso.",
@@ -141,15 +155,68 @@ def reset_password(req: schemas.ResetPasswordRequest, db: Session = Depends(get_
         )
         
     crud.reset_user_password(db, user, req.new_password)
+    crud.create_audit_log(db, user, 'reset_password', f'Reset de senha para {user.username}')
     return {"success": True, "message": "Senha redefinida com sucesso."}
 
 @app.post("/api/auth/logout")
 def logout(response: Response, session_token: Optional[str] = Cookie(None)):
     """Remove o cookie de sessão do usuário e invalida em memória."""
     if session_token and session_token in ACTIVE_SESSIONS:
+        username = ACTIVE_SESSIONS[session_token]
+        # registra audit log se usuário existir
+        try:
+            db = next(get_db())
+            user = crud.get_user_by_username(db, username)
+            if user:
+                crud.create_audit_log(db, user, 'logout', f'Logout {user.username}')
+        except Exception:
+            pass
         del ACTIVE_SESSIONS[session_token]
     response.delete_cookie("session_token", path="/")
     return {"message": "Sessão encerrada."}
+
+
+@app.post("/api/auth/login/google")
+def login_google(payload: dict, response: Response, db: Session = Depends(get_db)):
+    """Login via Google OAuth. Recebe JSON: { "id_token": "..." }"""
+    id_token = payload.get('id_token')
+    if not id_token:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="id_token ausente")
+
+    # Valida token com endpoint do Google
+    try:
+        r = requests.get('https://oauth2.googleapis.com/tokeninfo', params={'id_token': id_token}, timeout=5)
+        if r.status_code != 200:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token Google inválido")
+        info = r.json()
+        email = info.get('email')
+        if not email:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token Google inválido: sem email")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao validar token Google: {str(e)}")
+
+    user = crud.get_user_by_username(db, email)
+    # Se não existir, criar novo usuário (se houver cota)
+    if not user:
+        try:
+            quota = int(os.getenv('ACCOUNT_QUOTA', '0'))
+        except Exception:
+            quota = 0
+        if quota > 0 and crud.count_users(db) >= quota:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Limite de contas atingido.")
+        user = crud.create_user_google(db, email)
+        crud.create_audit_log(db, user, 'register_oauth', f'Usuário criado via Google: {email}')
+
+    # Cria sessão sem 2FA
+    session_token = secrets.token_hex(32)
+    ACTIVE_SESSIONS[session_token] = user.username
+    response.set_cookie(
+        key='session_token', value=session_token, max_age=7200, httponly=False, samesite='lax', path='/'
+    )
+    crud.create_audit_log(db, user, 'login_oauth', f'Login via Google: {user.username}')
+    return {"success": True, "message": "Autenticado via Google.", "session_token": session_token}
 
 
 @app.get("/api/transacoes", response_model=List[schemas.TransacaoResponse])

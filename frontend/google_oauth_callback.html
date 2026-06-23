@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Google OAuth Callback</title>
+</head>
+<body>
+<script>
+(function(){
+  try {
+    const hash = window.location.hash.substring(1);
+    const params = new URLSearchParams(hash);
+    const id_token = params.get('id_token');
+    if (window.opener && id_token) {
+      // Post the token back to the opener window
+      window.opener.postMessage({ type: 'google-id-token', id_token: id_token }, window.location.origin);
+    }
+  } catch (e) {
+    console.error('callback error', e);
+  }
+  // Close the popup
+  try { window.close(); } catch(e){}
+})();
+</script>
+</body>
+</html>

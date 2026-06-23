@@ -338,6 +338,20 @@ body {
     letter-spacing: -0.5px;
 }
 
+/* Pequena etiqueta de variação percentual usada nas métricas */
+.metric-delta {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 6px;
+    display: inline-block;
+}
+.metric-delta.positive {
+    color: var(--color-receita);
+}
+.metric-delta.negative {
+    color: var(--color-despesa);
+}
+
 /* Tabs */
 .tabs-container {
     display: flex;

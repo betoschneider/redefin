@@ -4,6 +4,26 @@ Um aplicativo web moderno e intuitivo de Controle Financeiro Pessoal desenvolvid
 
 ---
 
+## 🆕 Novidades recentes
+
+Resumo das alterações e recursos adicionados recentemente no projeto:
+
+- **Isolamento por usuário**: agora todas as transações e operações são associadas a um `owner_id` (usuário). Cada usuário vê e altera apenas seus dados.
+- **Login via Google (OAuth)**: botão "Entrar com Google" no modal de login; fluxo popup que envia `id_token` ao backend. Neste método não é usada 2FA; contas Google novas são criadas automaticamente se a cota permitir.
+- **Limite de contas**: variável de ambiente `ACCOUNT_QUOTA` controla quantas contas novas podem ser criadas (aplicável ao registro normal e ao login via OAuth).
+- **Audit logs**: adicionada tabela `audit_logs` e registros em eventos críticos (registro, login OAuth, login 2FA, reset de senha, etc.). Migração Alembic incluída.
+- **Persistência e Docker**: SQLite é persistido em `./data/controle_financeiro.db` via `docker-compose` bind-mount; frontend também pode ser montado para hot-reload durante desenvolvimento. Veja `docker-compose.yml` e `alembic.ini`.
+- **Frontend: UX e métricas**:
+   - Removido botão "Editar Lançamentos" (interface simplificada).
+   - Coluna "Pago" com cabeçalho oculto e checkbox alinhado à esquerda; largura das colunas de ação e categoria ajustada para melhor leitura.
+   - Cache-busting dos assets via sufixo `?v=` nas referências (atualmente `?v=4`).
+   - Métrica **Saldo Projetado**: quando `Filtrar Visão = "Ano Completo"` o rótulo passa a ser "Mês atual" e é exibido ao lado um comparativo percentual (+/-) relativo ao `Saldo Efetivado` do mês anterior; o percentual possui tooltip explicativo com valores.
+   - Métrica **Saldo Efetivado**: quando `Filtrar Visão = "Ano Completo"` o rótulo passa a ser "Mês atual".
+- **Dependências**: `pyproject.toml` atualizado para incluir `requests` e outras dependências úteis de desenvolvimento/testes.
+
+Consulte os arquivos modificados para detalhes de implementação: `backend/app/crud.py`, `backend/app/main.py`, `backend/app/models.py`, `alembic/versions/*`, `frontend/index.html`, `frontend/js/app.js`, `frontend/css/style.css`, `pyproject.toml`, `docker-compose.yml`.
+
+
 ## 🚀 Funcionalidades Principais
 
 1. **Autenticação Segura em Duas Etapas (2FA)**:

@@ -232,6 +232,15 @@ body {
     border-radius: var(--radius-md);
 }
 
+/* Filters Bar */
+.filters-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 20px;
+    border-radius: var(--radius-md);
+}
+
 .header-logo {
     display: flex;
     align-items: center;
@@ -725,6 +734,17 @@ body.light-theme .row-reserva .cell-select {
     font-size: 13px;
 }
 
+.investment-toolbar.left-aligned {
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+}
+
+.control-divider {
+    color: var(--text-muted);
+    margin: 0 10px;
+    font-weight: 300;
+}
+
 .investment-actions,
 .investment-form,
 .investment-confirm,
@@ -1058,7 +1078,8 @@ body.light-theme .row-reserva .cell-select {
 
 /* Responsividade Básica */
 @media (max-width: 768px) {
-    .app-header {
+    .app-header,
+    .filters-bar {
         flex-direction: column;
         align-items: stretch;
         gap: 16px;

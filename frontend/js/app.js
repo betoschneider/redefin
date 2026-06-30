@@ -770,6 +770,10 @@ function renderizarTabelaEdicao() {
     const numMesOrdenacao = MAPA_REVERSO_MES[mesOrdenacao];
 
     const dadosOrdenados = [...dadosPivotados].sort((a, b) => {
+        // Linhas novas sempre vêm primeiro
+        if (a.isNew && !b.isNew) return -1;
+        if (!a.isNew && b.isNew) return 1;
+
         // Tipo desc (Receita vem antes de Despesa se compararmos texto ou priorizarmos. No original: 'Tipo' descending)
         // No original: Receita, Despesa, Investimento, Reserva
         const prioridadeTipo = { "Receita": 4, "Despesa": 3, "Investimento": 2, "Reserva": 1 };
@@ -783,8 +787,8 @@ function renderizarTabelaEdicao() {
         if (pagoA !== pagoB) return pagoA - pagoB; // Ascending
 
         // Valor do mês atual desc
-        const valA = a.meses[numMesOrdenacao]?.valor || 0;
-        const valB = b.meses[numMesOrdenacao]?.valor || 0;
+        const valA = (a.meses[numMesOrdenacao]?.valor === null || a.meses[numMesOrdenacao]?.valor === undefined) ? 0 : a.meses[numMesOrdenacao].valor;
+        const valB = (b.meses[numMesOrdenacao]?.valor === null || b.meses[numMesOrdenacao]?.valor === undefined) ? 0 : b.meses[numMesOrdenacao].valor;
         if (valA !== valB) return valB - valA; // Descending
 
         // Categoria desc
@@ -845,7 +849,9 @@ function renderizarTabelaEdicao() {
         const tdTipo = document.createElement("td");
         const selectTp = document.createElement("select");
         selectTp.className = "cell-select";
-        ["Receita", "Despesa", "Investimento", "Reserva"].forEach(tp => {
+        // Permitir valor vazio se for linha nova
+        const tiposOpcoes = row.tipo === "" ? ["", "Receita", "Despesa", "Investimento", "Reserva"] : ["Receita", "Despesa", "Investimento", "Reserva"];
+        tiposOpcoes.forEach(tp => {
             const opt = document.createElement("option");
             opt.value = tp;
             opt.textContent = tp;
@@ -853,7 +859,18 @@ function renderizarTabelaEdicao() {
             selectTp.appendChild(opt);
         });
         selectTp.addEventListener("change", (e) => {
-            dadosPivotados[idxOriginal].tipo = e.target.value;
+            const novoTipo = e.target.value;
+            dadosPivotados[idxOriginal].tipo = novoTipo;
+            
+            // Atualiza cor de fundo da linha imediatamente
+            const tipoLimpo = novoTipo.trim().toLowerCase();
+            tr.className = "";
+            if (tipoLimpo === "receita") tr.className = "row-receita";
+            else if (tipoLimpo === "despesa") tr.className = "row-despesa";
+            else if (tipoLimpo === "investimento") tr.className = "row-investimento";
+            else if (tipoLimpo === "reserva") tr.className = "row-reserva";
+            else tr.className = "row-padrao";
+
             atualizarMetricas();
             popularSeletorTipoDetalhe();
             atualizarGraficos();
@@ -878,7 +895,7 @@ function renderizarTabelaEdicao() {
         // Inputs dos meses
         mesesAExibir.forEach(mes => {
             const numMes = MAPA_REVERSO_MES[mes];
-            const dadosMes = row.meses[numMes] || { valor: 0.0, pago: false };
+            const dadosMes = row.meses[numMes] || { valor: null, pago: false };
 
             // Célula Valor
             const tdVal = document.createElement("td");
@@ -886,11 +903,16 @@ function renderizarTabelaEdicao() {
             inputVal.type = "number";
             inputVal.step = "0.01";
             inputVal.className = "cell-input cell-input-number";
-            inputVal.value = dadosMes.valor === 0 ? "0.00" : dadosMes.valor.toFixed(2);
+            
+            // Exibir vazio se o valor for null ou undefined (em branco)
+            const valorExibido = (dadosMes.valor === null || dadosMes.valor === undefined) ? "" : (dadosMes.valor === 0 ? "0.00" : dadosMes.valor.toFixed(2));
+            inputVal.value = valorExibido;
+
             inputVal.addEventListener("change", (e) => {
-                let v = parseFloat(e.target.value) || 0.0;
+                let v = e.target.value === "" ? null : parseFloat(e.target.value);
+                if (isNaN(v)) v = null;
                 dadosPivotados[idxOriginal].meses[numMes].valor = v;
-                e.target.value = v === 0 ? "0.00" : v.toFixed(2);
+                e.target.value = (v === null || v === undefined) ? "" : (v === 0 ? "0.00" : v.toFixed(2));
                 atualizarMetricas();
                 atualizarGraficos();
             });
@@ -923,23 +945,24 @@ function renderizarTabelaEdicao() {
 function adicionarLinha() {
     const novaLinha = {
         item: "",
-        tipo: "Despesa",
+        tipo: "",
         categoria: "",
-        meses: {}
+        meses: {},
+        isNew: true
     };
     
-    // Inicializa meses com valor zerado e pago=false
+    // Inicializa meses com valor nulo (em branco) e pago=false
     for (let m = 1; m <= 12; m++) {
-        novaLinha.meses[m] = { valor: 0.0, pago: false };
+        novaLinha.meses[m] = { valor: null, pago: false };
     }
     
     dadosPivotados.push(novaLinha);
     renderizarTabelas();
     
-    // Rola a tabela de edição para o final para facilitar visualização
+    // Rola a tabela de edição para o topo para facilitar visualização
     setTimeout(() => {
         const container = document.querySelector("#tab-editar .table-container");
-        container.scrollTop = container.scrollHeight;
+        if (container) container.scrollTop = 0;
     }, 100);
 }
 
@@ -1100,7 +1123,8 @@ async function salvarDadosServidor() {
             if (row.item.trim() || row.tipo.trim() || row.categoria.trim()) {
                 // Para cada um dos 12 meses
                 for (let m = 1; m <= 12; m++) {
-                    const dadosMes = row.meses[m] || { valor: 0.0, pago: false };
+                    const dadosMes = row.meses[m] || { valor: null, pago: false };
+                    const valorSalvo = (dadosMes.valor === null || dadosMes.valor === undefined) ? 0.0 : (parseFloat(dadosMes.valor) || 0.0);
                     
                     transacoesPlanas.push({
                         ano: anoAtivo,
@@ -1108,7 +1132,7 @@ async function salvarDadosServidor() {
                         item: row.item.trim(),
                         tipo: row.tipo.trim(),
                         categoria: row.categoria.trim(),
-                        valor: parseFloat(dadosMes.valor) || 0.0,
+                        valor: valorSalvo,
                         pago: boolValue(dadosMes.pago)
                     });
                 }

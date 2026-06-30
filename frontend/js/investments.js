@@ -44,7 +44,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     window.onInvestmentTabActivated = () => {
         if (!investmentPortfolio) carregarInvestments();
-        carregarAuditLogs();
     };
 });
 
@@ -66,7 +65,6 @@ async function carregarInvestments() {
         investmentPortfolio = await resp.json();
         renderInvestmentPortfolio();
         renderInvestmentSuggestions();
-        await carregarAuditLogs();
     } catch (e) {
         console.error(e);
         alert("Não foi possível carregar a carteira de investimento.");
@@ -364,33 +362,6 @@ async function downloadInvestments() {
     }
 }
 
-async function carregarAuditLogs() {
-    const token = obterCookie("session_token");
-    const tbody = document.getElementById("audit-tbody");
-    if (!token || !tbody) return;
-
-    try {
-        const resp = await fetch("/api/audit-logs", {
-            headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (!resp.ok) throw new Error("Falha ao carregar auditoria.");
-        const logs = await resp.json();
-        tbody.innerHTML = "";
-        if (!logs.length) {
-            renderEmptyRow(tbody, 3, "Nenhum evento registrado.");
-            return;
-        }
-        logs.forEach(log => {
-            const tr = document.createElement("tr");
-            appendCell(tr, new Date(log.timestamp).toLocaleString("pt-BR"));
-            appendCell(tr, log.action);
-            appendCell(tr, log.detail || "-");
-            tbody.appendChild(tr);
-        });
-    } catch (e) {
-        console.error(e);
-    }
-}
 
 function updateSuggestionTotals(total, leftover) {
     setText("inv-suggested-total", formatarMoeda(total));

@@ -1,11 +1,15 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Google OAuth Client ID -->
     <meta name="google-client-id" content="796797603259-gi07j7mmpdoo0fau7s6nnaqb8kk54pqf.apps.googleusercontent.com">
-    <title>Controle Financeiro 📊</title>
+    <title>Planejamento Financeiro</title>
+    <!-- Favicon -->
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📊</text></svg>">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,8 +19,9 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Versão dos assets para cache-busting: incremente manualmente ao deploy (ex: v1 -> v2) -->
-    <link rel="stylesheet" href="css/style.css?v=9">
+    <link rel="stylesheet" href="css/style.css?v=10">
 </head>
+
 <body>
     <!-- Overlay de Loading -->
     <div id="loading-overlay" class="overlay hidden">
@@ -45,7 +50,8 @@
                 </div>
                 <div class="modal-footer">
                     <button id="btn-login-next" class="btn btn-primary btn-block">Avançar</button>
-                    <button id="btn-google-login" class="btn btn-secondary" style="margin-top:8px;"> <i class="fa-brands fa-google"></i> Entrar com Google</button>
+                    <button id="btn-google-login" class="btn btn-secondary" style="margin-top:8px;"> <i
+                            class="fa-brands fa-google"></i> Entrar com Google</button>
                     <div class="auth-links">
                         <a href="#" id="link-go-register">Criar Conta</a>
                         <span style="color: var(--text-muted)">|</span>
@@ -63,7 +69,8 @@
                     <p>Digite o código de 6 dígitos gerado pelo Google Authenticator.</p>
                     <div class="input-group">
                         <label for="login-otp">Código Autenticador</label>
-                        <input type="text" id="login-otp" placeholder="000000" maxlength="6" style="text-align: center; font-size: 20px; letter-spacing: 4px;">
+                        <input type="text" id="login-otp" placeholder="000000" maxlength="6"
+                            style="text-align: center; font-size: 20px; letter-spacing: 4px;">
                     </div>
                     <div id="login-step2-error" class="error-msg hidden"></div>
                 </div>
@@ -81,7 +88,7 @@
                     <h2><i class="fa-solid fa-user-plus"></i> Novo Cadastro</h2>
                 </div>
                 <div class="modal-body">
-                    <p>Crie uma conta para acessar o Controle Financeiro.</p>
+                    <p>Crie uma conta para acessar o Planejamento Financeiro.</p>
                     <div class="input-group">
                         <label for="register-username">E-mail</label>
                         <input type="email" id="register-username" placeholder="seu@email.com">
@@ -108,11 +115,13 @@
                 <div class="modal-body" style="text-align: center;">
                     <p>Escaneie o código QR no Google Authenticator ou adicione a chave abaixo manualmente.</p>
                     <div class="qr-container" style="display: flex; justify-content: center; margin: 15px 0;">
-                        <img id="setup-qr-img" src="" alt="Código QR 2FA" style="border: 6px solid white; border-radius: 8px; max-width: 180px; height: 180px;">
+                        <img id="setup-qr-img" src="" alt="Código QR 2FA"
+                            style="border: 6px solid white; border-radius: 8px; max-width: 180px; height: 180px;">
                     </div>
                     <div class="input-group">
                         <label>Chave de Configuração Manual</label>
-                        <input type="text" id="setup-secret-key" readonly style="text-align: center; font-family: monospace; font-size: 14px; background: rgba(255,255,255,0.05); color: var(--color-receita);">
+                        <input type="text" id="setup-secret-key" readonly
+                            style="text-align: center; font-family: monospace; font-size: 14px; background: rgba(255,255,255,0.05); color: var(--color-receita);">
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -133,7 +142,8 @@
                     </div>
                     <div class="input-group">
                         <label for="reset-otp">Código Autenticador (2FA)</label>
-                        <input type="text" id="reset-otp" placeholder="Código de 6 dígitos" maxlength="6" style="text-align: center; font-size: 16px;">
+                        <input type="text" id="reset-otp" placeholder="Código de 6 dígitos" maxlength="6"
+                            style="text-align: center; font-size: 16px;">
                     </div>
                     <div class="input-group">
                         <label for="reset-new-password">Nova Senha</label>
@@ -157,42 +167,58 @@
         <header class="app-header glass">
             <div class="header-logo">
                 <i class="fa-solid fa-chart-line logo-icon"></i>
-                <h1>Controle Financeiro</h1>
+                <h1>Planejamento Financeiro</h1>
             </div>
             <div class="header-controls">
-                <div class="control-group financial-only">
-                    <label for="select-ano">Ano:</label>
-                    <select id="select-ano" class="custom-select"></select>
-                </div>
-                <div class="control-group financial-only">
-                    <label for="select-mes">Filtrar Visão:</label>
-                    <select id="select-mes" class="custom-select">
-                        <option value="Ano Completo">Ano Completo</option>
-                        <option value="Jan">Jan</option>
-                        <option value="Fev">Fev</option>
-                        <option value="Mar">Mar</option>
-                        <option value="Abr">Abr</option>
-                        <option value="Mai">Mai</option>
-                        <option value="Jun">Jun</option>
-                        <option value="Jul">Jul</option>
-                        <option value="Ago">Ago</option>
-                        <option value="Set">Set</option>
-                        <option value="Out">Out</option>
-                        <option value="Nov">Nov</option>
-                        <option value="Dez">Dez</option>
-                    </select>
-                </div>
-                <button id="btn-theme-toggle" class="btn btn-secondary" title="Alternar Tema"><i class="fa-solid fa-moon"></i></button>
-                <button id="btn-logout" class="btn btn-danger-outline" title="Sair"><i class="fa-solid fa-right-from-bracket"></i></button>
+                <button id="btn-theme-toggle" class="btn btn-secondary" title="Alternar Tema"><i
+                        class="fa-solid fa-moon"></i></button>
+                <button id="btn-logout" class="btn btn-danger-outline" title="Sair"><i
+                        class="fa-solid fa-right-from-bracket"></i></button>
             </div>
         </header>
 
+        <!-- Botões de alternância de aplicação: "Controle Financeiro" e "Carteira" -->
+        <div class="tabs-header glass">
+            <button class="tab-btn active" data-tab="tab-editar"><i class="fa-solid fa-table-list"></i> Controle
+                Financeiro</button>
+            <button class="tab-btn" data-tab="tab-carteira"><i class="fa-solid fa-chart-line"></i> Carteira</button>
+        </div>
+
+        <!-- Filtros do Controle Financeiro -->
+        <section class="investment-toolbar left-aligned glass financial-only">
+            <div class="toolbar-title">
+                <h2><i class="fa-solid fa-table-list"></i> Controle Financeiro</h2>
+            </div>
+            <div class="control-divider">|</div>
+            <div class="control-group">
+                <label for="select-ano">Ano:</label>
+                <select id="select-ano" class="custom-select"></select>
+            </div>
+            <div class="control-group">
+                <label for="select-mes">Filtrar Visão:</label>
+                <select id="select-mes" class="custom-select">
+                    <option value="Ano Completo">Ano Completo</option>
+                    <option value="Jan">Jan</option>
+                    <option value="Fev">Fev</option>
+                    <option value="Mar">Mar</option>
+                    <option value="Abr">Abr</option>
+                    <option value="Mai">Mai</option>
+                    <option value="Jun">Jun</option>
+                    <option value="Jul">Jul</option>
+                    <option value="Ago">Ago</option>
+                    <option value="Set">Set</option>
+                    <option value="Out">Out</option>
+                    <option value="Nov">Nov</option>
+                    <option value="Dez">Dez</option>
+                </select>
+            </div>
+        </section>
         <!-- Dashboard Metrics -->
         <section class="metrics-grid financial-only">
             <div class="metric-card glass" id="card-saldo-atual">
                 <div class="metric-icon income"><i class="fa-solid fa-wallet"></i></div>
                 <div class="metric-info">
-                    <span class="metric-label" id="label-saldo-atual">Saldo Atual</span>
+                    <span class="metric-label" id="label-saldo-atual">Saldo Efetivado</span>
                     <h2 class="metric-value" id="val-saldo-atual">R$ 0,00</h2>
                 </div>
             </div>
@@ -208,10 +234,6 @@
 
         <!-- Tabs Navigation -->
         <div class="tabs-container">
-            <div class="tabs-header">
-                <button class="tab-btn active" data-tab="tab-editar"><i class="fa-solid fa-table-list"></i> Controle Financeiro</button>
-                <button class="tab-btn" data-tab="tab-carteira"><i class="fa-solid fa-chart-line"></i> Carteira</button>
-            </div>
             <!-- Tab: Editar Lançamentos -->
             <div id="tab-editar" class="tab-content active">
                 <div class="table-actions glass">
@@ -222,11 +244,13 @@
                         <button id="btn-propagar" class="btn btn-info hidden">
                             <i class="fa-solid fa-wand-magic-sparkles"></i> Propagar
                         </button>
-                        
-                        <div style="display: flex; gap: 8px; align-items: center; border-left: 1px solid var(--border-color); padding-left: 12px; margin-left: 4px;">
+
+                        <div
+                            style="display: flex; gap: 8px; align-items: center; border-left: 1px solid var(--border-color); padding-left: 12px; margin-left: 4px;">
                             <div class="control-group">
                                 <label for="filter-tipo" style="font-size: 12px;">Tipo:</label>
-                                <select id="filter-tipo" class="custom-select" style="padding: 4px 8px; font-size: 12px;">
+                                <select id="filter-tipo" class="custom-select"
+                                    style="padding: 4px 8px; font-size: 12px;">
                                     <option value="Todos">Todos</option>
                                     <option value="Receita">Receita</option>
                                     <option value="Despesa">Despesa</option>
@@ -236,7 +260,8 @@
                             </div>
                             <div class="control-group">
                                 <label for="filter-categoria" style="font-size: 12px;">Categoria:</label>
-                                <select id="filter-categoria" class="custom-select" style="padding: 4px 8px; font-size: 12px; max-width: 150px;">
+                                <select id="filter-categoria" class="custom-select"
+                                    style="padding: 4px 8px; font-size: 12px; max-width: 150px;">
                                     <option value="Todas">Todas</option>
                                 </select>
                             </div>
@@ -246,7 +271,8 @@
                         <button id="btn-download-csv" class="btn btn-secondary" title="Exportar CSV Completo">
                             <i class="fa-solid fa-download"></i> Exportar
                         </button>
-                        <button id="btn-upload-trigger" class="btn btn-secondary" title="Importar CSV Completo (Substitui todos os dados)">
+                        <button id="btn-upload-trigger" class="btn btn-secondary"
+                            title="Importar CSV Completo (Substitui todos os dados)">
                             <i class="fa-solid fa-upload"></i> Importar
                         </button>
                         <input type="file" id="input-upload-csv" accept=".csv" class="hidden">
@@ -279,9 +305,12 @@
                     <p id="inv-last-updated">Cotações ainda não carregadas.</p>
                 </div>
                 <div class="investment-actions">
-                    <button id="btn-inv-refresh" class="btn btn-secondary" title="Atualizar cotações"><i class="fa-solid fa-rotate"></i></button>
-                    <button id="btn-inv-download" class="btn btn-secondary" title="Exportar CSV"><i class="fa-solid fa-download"></i> Exportar</button>
-                    <button id="btn-inv-upload-trigger" class="btn btn-secondary" title="Importar CSV"><i class="fa-solid fa-upload"></i> Importar</button>
+                    <button id="btn-inv-refresh" class="btn btn-secondary" title="Atualizar cotações"><i
+                            class="fa-solid fa-rotate"></i></button>
+                    <button id="btn-inv-download" class="btn btn-secondary" title="Exportar CSV"><i
+                            class="fa-solid fa-download"></i> Exportar</button>
+                    <button id="btn-inv-upload-trigger" class="btn btn-secondary" title="Importar CSV"><i
+                            class="fa-solid fa-upload"></i> Importar</button>
                     <input type="file" id="btn-inv-upload" accept=".csv" class="hidden">
                 </div>
             </section>
@@ -342,63 +371,47 @@
                 </div>
             </section>
 
-            <section class="investment-grid">
-                <div class="chart-card glass">
-                    <h3><i class="fa-solid fa-coins"></i> Sugestão de Aporte</h3>
-                    <div class="investment-form">
-                        <div class="input-group">
-                            <label for="inv-contribution-value">Valor a investir</label>
-                            <input type="number" id="inv-contribution-value" min="0" step="50" value="500">
-                        </div>
-                        <div class="input-group">
-                            <label for="inv-contribution-assets">Quantidade de ativos</label>
-                            <input type="number" id="inv-contribution-assets" min="1" step="1" value="3">
-                        </div>
+            <!-- Sugestão de Aporte -->
+            <div class="chart-card glass">
+                <h3><i class="fa-solid fa-coins"></i> Sugestão de Aporte</h3>
+                <div class="investment-form">
+                    <div class="input-group">
+                        <label for="inv-contribution-value">Valor a investir</label>
+                        <input type="number" id="inv-contribution-value" min="0" step="50" value="500">
                     </div>
-                    <div class="investment-summary">
-                        <span>Total sugerido: <strong id="inv-suggested-total">R$ 0,00</strong></span>
-                        <span>Sobra: <strong id="inv-suggested-leftover">R$ 0,00</strong></span>
-                    </div>
-                    <div class="table-container investment-table-wrap">
-                        <table class="interactive-table investment-table">
-                            <thead>
-                                <tr>
-                                    <th>Ativo</th>
-                                    <th>Valor Unitário</th>
-                                    <th>Cotas Sugeridas</th>
-                                    <th>Total</th>
-                                    <th>Novo Desvio</th>
-                                </tr>
-                            </thead>
-                            <tbody id="inv-suggestion-tbody"></tbody>
-                        </table>
-                    </div>
-                    <div class="investment-confirm">
-                        <label class="checkbox-container">
-                            <input type="checkbox" id="inv-confirm-check">
-                            <span class="checkmark"></span>
-                            Confirmo que quero atualizar as quantidades da carteira
-                        </label>
-                        <button id="btn-inv-confirm" class="btn btn-primary" disabled><i class="fa-solid fa-check"></i> Confirmar Aporte</button>
+                    <div class="input-group">
+                        <label for="inv-contribution-assets">Quantidade de ativos</label>
+                        <input type="number" id="inv-contribution-assets" min="1" step="1" value="3">
                     </div>
                 </div>
-
-                <div class="chart-card glass">
-                    <h3><i class="fa-solid fa-clipboard-list"></i> Auditoria</h3>
-                    <div class="table-container investment-table-wrap">
-                        <table class="interactive-table investment-table">
-                            <thead>
-                                <tr>
-                                    <th>Data</th>
-                                    <th>Ação</th>
-                                    <th>Detalhe</th>
-                                </tr>
-                            </thead>
-                            <tbody id="audit-tbody"></tbody>
-                        </table>
-                    </div>
+                <div class="investment-summary">
+                    <span>Total sugerido: <strong id="inv-suggested-total">R$ 0,00</strong></span>
+                    <span>Sobra: <strong id="inv-suggested-leftover">R$ 0,00</strong></span>
                 </div>
-            </section>
+                <div class="table-container investment-table-wrap">
+                    <table class="interactive-table investment-table">
+                        <thead>
+                            <tr>
+                                <th>Ativo</th>
+                                <th>Valor Unitário</th>
+                                <th>Cotas Sugeridas</th>
+                                <th>Total</th>
+                                <th>Novo Desvio</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inv-suggestion-tbody"></tbody>
+                    </table>
+                </div>
+                <div class="investment-confirm">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="inv-confirm-check">
+                        <span class="checkmark"></span>
+                        Confirmo que quero atualizar as quantidades da carteira
+                    </label>
+                    <button id="btn-inv-confirm" class="btn btn-primary" disabled><i class="fa-solid fa-check"></i>
+                        Confirmar Aporte</button>
+                </div>
+            </div>
         </div>
 
         <!-- Charts Section -->
@@ -446,8 +459,9 @@
 
     <!-- Scripts da Aplicação -->
     <!-- Versão dos assets para forçar refresh quando necessário -->
-    <script src="js/charts.js?v=9"></script>
-    <script src="js/app.js?v=9"></script>
-    <script src="js/investments.js?v=9"></script>
+    <script src="js/charts.js?v=10"></script>
+    <script src="js/app.js?v=10"></script>
+    <script src="js/investments.js?v=10"></script>
 </body>
+
 </html>

@@ -334,6 +334,16 @@ body {
     color: var(--color-reserva);
 }
 
+.metric-icon.projection-year {
+    background-color: rgba(108, 92, 231, 0.15);
+    color: var(--primary-color);
+}
+
+.metric-icon.income-year {
+    background-color: rgba(46, 204, 113, 0.10);
+    color: #27ae60;
+}
+
 .metric-info {
     display: flex;
     flex-direction: column;
@@ -603,6 +613,19 @@ th {
     display: inline-block;
 }
 
+/* Destaque do mês atual no cabeçalho da tabela */
+.interactive-table th.th-mes-atual {
+    background-color: rgba(108, 92, 231, 0.22);
+    color: var(--primary-color);
+    border-bottom: 2px solid var(--primary-color);
+    font-weight: 700;
+}
+
+body.light-theme .interactive-table th.th-mes-atual {
+    background-color: rgba(108, 92, 231, 0.14);
+    color: var(--primary-color);
+}
+
 /* Ação de remover linha */
 .btn-delete-row {
     background: transparent;
@@ -684,6 +707,13 @@ body.light-theme .row-reserva .cell-select {
 
 /* Charts Section */
 .charts-section {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+/* Gráfico inline dentro do tab (acima da tabela) */
+.charts-section-inline {
     display: flex;
     flex-direction: column;
     gap: 24px;

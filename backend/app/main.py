@@ -391,6 +391,22 @@ def get_audit_logs(db: Session = Depends(get_db), username: str = Depends(verifi
     ]
 
 
+@app.get("/api/transacoes/anos", response_model=List[int])
+def listar_anos_existentes(
+    db: Session = Depends(get_db),
+    _username: str = Depends(verificar_autenticacao)
+):
+    """Retorna uma lista de todos os anos que possuem transações para o usuário."""
+    user = crud.get_user_by_username(db, _username)
+    if not user:
+        return []
+    anos_tuples = db.query(models.Transacao.ano).filter(
+        models.Transacao.owner_id == user.id
+    ).distinct().all()
+    anos = [a[0] for a in anos_tuples if a[0] is not None]
+    return sorted(list(set(anos)))
+
+
 @app.get("/api/transacoes", response_model=List[schemas.TransacaoResponse])
 def listar_transacoes(
     ano: int,

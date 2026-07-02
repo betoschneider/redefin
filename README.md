@@ -9,26 +9,6 @@ O projeto usa **FastAPI**, **SQLAlchemy**, **SQLite**, **Alembic** e frontend em
 
 ---
 
-## Novidades Recentes
-
-- Área de **Carteira de Investimento** integrada como uma seção própria da aplicação, separada dos filtros, métricas e gráficos do Controle Financeiro.
-- Tabela de ativos com quantidade, preço atual, total, meta, percentual atual, desvio, ramo e grupo.
-- Cotações via `yfinance`, com cache de 1 hora para reduzir chamadas ao Yahoo Finance.
-- Gráfico horizontal de **Desvio da Meta** com linha vertical no zero e barras coloridas pela cor do grupo do ativo.
-- Linhas das tabelas da carteira coloridas por grupo.
-- Simulador de aporte com valor disponível e quantidade de ativos a comprar.
-- Sugestão automática priorizando os ativos com maior distância negativa da meta.
-- Edição da quantidade sugerida antes da confirmação.
-- Confirmação de aporte com checkbox, atualizando as quantidades no banco.
-- Importação/exportação CSV da carteira, com aviso de que a importação remove os dados atuais.
-- Tabela de auditoria exibida na interface e endpoint `/api/audit-logs`.
-- Isolamento por usuário para transações e carteira por `owner_id`.
-- Login por usuário/senha com 2FA TOTP e login via Google OAuth.
-- Correção do uso de `Authorization: Bearer <token>` nas APIs.
-- Assets do frontend com cache-busting `?v=9`.
-
----
-
 ## Funcionalidades
 
 ### Autenticação
@@ -43,53 +23,108 @@ O projeto usa **FastAPI**, **SQLAlchemy**, **SQLite**, **Alembic** e frontend em
 
 ### Controle Financeiro
 
-- Tabela interativa para receitas, despesas, investimentos e reservas.
-- Filtro por ano e por mês ou ano completo.
-- Filtros locais por tipo e categoria.
-- Métricas de saldo efetivado e saldo projetado.
-- Comparativo percentual do saldo projetado em relação ao mês anterior quando a visão é anual.
+#### Dashboard de Métricas
+
+Quatro cards exibidos no topo da visão, sempre juntos:
+
+| Card | O que mostra |
+|---|---|
+| **Saldo Projetado do Mês** | Receitas − demais tipos do mês atual (ou mês filtrado). Inclui delta % vs. mês anterior quando a visão é "Ano Completo". |
+| **Saldo Efetivo do Mês** | Igual ao Projetado, mas apenas lançamentos com `pago = true`. |
+| **Saldo Total do Ano Projetado** | Soma de todas as receitas − demais tipos considerando os 12 meses do ano. **Não é afetado pelo filtro de mês.** Inclui delta % comparado ao Saldo Total Efetivo do ano anterior. |
+| **Saldo Total do Ano Efetivo** | Igual ao anterior, mas apenas valores efetivados. **Não é afetado pelo filtro de mês.** |
+
+O delta % do **Saldo Total do Ano Projetado** é calculado em relação ao **Saldo Total Efetivo do ano anterior**, carregado automaticamente em segundo plano. O tooltip de cada delta exibe os valores de referência para contexto.
+
+#### Gráfico de Evolução Mensal
+
+- Posicionado **acima das métricas**, logo após os controles de navegação.
+- Exibe receitas, despesas, investimentos e reservas mês a mês para o ano selecionado.
+
+#### Filtros e Controles
+
+Todos os filtros e ações ficam na mesma barra, acima da tabela:
+
+- **Ano**: seleciona o ano dos lançamentos (janela de 4 anos).
+- **Mês**: filtra a visão por mês específico ou mantém "Ano Completo". O filtro de mês **não** afeta os cards de Saldo Total do Ano.
+- **Tipo**: filtra as linhas da tabela por Receita, Despesa, Investimento ou Reserva.
+- **Categoria**: filtra as linhas da tabela por categoria.
+- **+ Adicionar**: insere nova linha em branco no topo da tabela.
+- **Propagar**: aparece quando um mês específico está selecionado; preenche meses seguintes com o valor do mês atual (apenas onde o valor for zero).
+- **Exportar / Importar CSV**.
+- **Salvar**: persiste todos os lançamentos no servidor.
+
+#### Tabela de Lançamentos
+
+- Edição inline de Item, Tipo, Categoria, Valor e status de pago (checkbox).
+- Colunas de meses exibidas conforme filtro de Mês selecionado.
+- **Cabeçalho do mês atual destacado** com cor de fundo diferenciada (roxo semitransparente) e borda inferior, facilitando a localização visual.
+- Linhas coloridas por tipo (verde = Receita, vermelho = Despesa, azul = Investimento, amarelo = Reserva).
+- Exclusão de linha com confirmação.
+
+#### Detalhamento Econômico
+
+Abaixo da tabela, com gráficos de:
+
+- **Proporção por Categoria** (rosca).
+- **Ranking de Itens** (barras horizontais).
+- Filtro para exibir apenas valores efetivados.
+- Seletor de tipo a explodir (Receita, Despesa, Investimento ou Reserva).
+
+#### Outras Funcionalidades
+
 - Propagação de valores do mês atual para meses seguintes.
 - Replicação automática de estrutura do ano mais recente ao abrir ano atual/futuro sem dados.
-- Gráficos de evolução mensal, proporção por categoria e ranking de itens.
-- Tema claro/escuro persistido no navegador.
+- Tema claro/escuro persistido no navegador, com re-renderização automática dos gráficos.
 - Importação/exportação CSV de lançamentos.
+
+---
 
 ### Carteira de Investimento
 
-- Seção própria acessada pela aba **Carteira**.
-- Métricas:
-  - Patrimônio total.
-  - Total de ativos monitorados.
-  - Soma das metas.
-- Consulta de cotação atual via Yahoo Finance.
-- Fallback para tickers B3/fracionários, como `PETR4F` e `PETR4.SA`.
-- Tabela de ativos ordenada pelo desvio da meta, do menor para o maior.
-- Cálculos por ativo:
-  - Preço.
-  - Total atual.
-  - Meta.
-  - Percentual atual.
-  - Desvio.
-- Gráfico horizontal de desvio da meta:
-  - Linha vertical no zero.
-  - Barras coloridas pelo grupo do ativo.
-  - Borda sutil indicando desvio positivo ou negativo.
-- Simulador de aporte:
-  - Input de valor a investir.
-  - Input de quantidade de ativos.
-  - Sugestão de cotas para os ativos mais abaixo da meta.
-  - Cálculo de total sugerido, sobra e novo desvio após aporte.
-  - Edição manual das cotas sugeridas.
-  - Checkbox de confirmação antes de atualizar a carteira.
+Seção acessada pela aba **Carteira**, isolada dos controles do Controle Financeiro.
+
+#### Métricas
+
+- Patrimônio total.
+- Total de ativos monitorados.
+- Soma das metas.
+
+#### Tabela de Ativos
+
+- Ativos ordenados pelo desvio da meta (menor para o maior).
+- Colunas: Ativo, Empresa, Qtd, Preço atual, Total, Meta, % Atual, Desvio, Ramo, Grupo.
+- Linhas coloridas por grupo do ativo.
+- Cotações via `yfinance` com cache de 1 hora.
+- Fallback para tickers B3/fracionários (ex: `PETR4F` → `PETR4.SA`).
+
+#### Gráfico de Desvio da Meta
+
+- Barras horizontais coloridas pela cor do grupo.
+- Linha vertical no zero.
+- Borda indicando desvio positivo ou negativo.
+
+#### Simulador de Aporte
+
+- Input de valor a investir e quantidade de ativos.
+- Sugestão automática priorizando os ativos com maior distância negativa da meta.
+- Edição manual das cotas sugeridas.
+- Cálculo de total sugerido, sobra e novo desvio após aporte.
+- Checkbox de confirmação antes de atualizar a carteira.
+
+#### CSV e Auditoria
+
 - Importação/exportação CSV da carteira.
-- Auditoria de ações relevantes.
+- Auditoria de ações relevantes registrada em `audit_logs`.
+
+---
 
 ### Auditoria
 
-Eventos críticos são registrados em `audit_logs`, incluindo:
+Eventos registrados em `audit_logs`:
 
-- Cadastro.
-- Login etapa 1.
+- Cadastro de conta.
+- Login etapa 1 (senha).
 - Login completo com 2FA.
 - Login via Google.
 - Cadastro via Google.
@@ -119,9 +154,10 @@ Exemplo:
 
 Observações:
 
-- A importação substitui os lançamentos existentes do usuário.
+- A importação substitui todos os lançamentos existentes do usuário.
 - Datas aceitas incluem `DD/MM/YYYY` e `YYYY-MM-DD`.
 - `Pago` aceita valores como `True`, `False`, `1`, `0`, `pago` e `efetivado`.
+- Valores ausentes ou nulos são tratados como `0.0`.
 
 ### Carteira de Investimento
 
@@ -142,8 +178,8 @@ B3,B3SA3F,13,5.71,Financeiro / Seguros e Bolsa,Trio de Ferro
 
 Observações:
 
-- A importação da carteira remove os dados atuais da carteira do usuário antes de inserir o CSV.
-- Também há suporte interno a cabeçalhos em inglês: `company,ticker,quantity,target,sector,group`.
+- A importação remove os dados atuais da carteira do usuário antes de inserir o CSV.
+- Também há suporte a cabeçalhos em inglês: `company,ticker,quantity,target,sector,group`.
 - `Meta` pode usar ponto ou vírgula como separador decimal.
 
 ---
@@ -164,24 +200,24 @@ Observações:
 
 ```text
 backend/app/
-  main.py          Rotas FastAPI e montagem do frontend
-  models.py        Modelos SQLAlchemy
-  schemas.py       Schemas Pydantic
-  crud.py          Operações de banco
-  finance.py       Consulta/cache de cotações
+  main.py           Rotas FastAPI e montagem do frontend
+  models.py         Modelos SQLAlchemy
+  schemas.py        Schemas Pydantic
+  crud.py           Operações de banco
+  finance.py        Consulta/cache de cotações
 
 frontend/
   index.html
   css/style.css
-  js/app.js        Controle financeiro, auth, CSV e navegação
-  js/charts.js     Gráficos do controle financeiro
+  js/app.js         Controle financeiro, auth, CSV e navegação
+  js/charts.js      Gráficos do controle financeiro
   js/investments.js Carteira de investimento
 
 alembic/versions/
-  ...create_initial_tables.py
-  ...add_owner_id_to_transactions.py
-  ...add_audit_logs_table.py
-  ...add_investment_assets_table.py
+  61f5ca4cd77f_create_initial_tables.py
+  d191e4391174_add_owner_id_to_transactions.py
+  7a9d3b1f4c2c_add_audit_logs_table.py
+  8c2f1b4d5a7a_add_investment_assets_table.py
 ```
 
 ---
@@ -199,19 +235,15 @@ Instalação do `uv`, caso necessário:
 pip install uv
 ```
 
-### 2. Entrar na pasta correta
+### 2. Entrar na pasta do projeto
 
-Importante: execute os comandos a partir da raiz deste projeto:
+Execute os comandos a partir da raiz do projeto:
 
 ```bash
-cd /home/beto/projetos/js-controle-financeiro
+cd /home/beto/projetos/controle-financeiro
 ```
 
-Se o comando for executado em outra pasta, o Python pode não encontrar o pacote `backend` e retornar:
-
-```text
-ModuleNotFoundError: No module named 'backend'
-```
+> Se executado em outra pasta, o Python pode não encontrar o pacote `backend` e retornar `ModuleNotFoundError: No module named 'backend'`.
 
 ### 3. Instalar dependências
 
@@ -225,7 +257,7 @@ uv sync
 uv run alembic upgrade head
 ```
 
-Por padrão, o app local usa `sqlite:///./controle_financeiro.db`. No Docker, a variável `DATABASE_URL` aponta para `sqlite:///./data/controle_financeiro.db`.
+> Por padrão, o app local usa `sqlite:///./controle_financeiro.db`. No Docker, a variável `DATABASE_URL` aponta para `sqlite:///./data/controle_financeiro.db`.
 
 ### 5. Rodar o servidor
 
@@ -233,13 +265,9 @@ Por padrão, o app local usa `sqlite:///./controle_financeiro.db`. No Docker, a 
 uv run uvicorn backend.app.main:app --host 127.0.0.1 --port 8520
 ```
 
-Acesse:
+Acesse: `http://127.0.0.1:8520`
 
-```text
-http://127.0.0.1:8520
-```
-
-Para desenvolvimento com reload:
+Para desenvolvimento com reload automático:
 
 ```bash
 uv run uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8520
@@ -249,7 +277,7 @@ uv run uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8520
 
 ## Variáveis de Ambiente
 
-Crie/edite `.env` conforme necessário:
+Crie ou edite `.env` conforme necessário:
 
 ```env
 ACCOUNT_QUOTA=0
@@ -258,8 +286,8 @@ DATABASE_URL=sqlite:///./controle_financeiro.db
 
 Notas:
 
-- `ACCOUNT_QUOTA=0` significa sem limite de contas.
-- `DATABASE_URL` é opcional no modo local, pois há fallback no código.
+- `ACCOUNT_QUOTA=0` significa sem limite de criação de contas. Qualquer valor positivo limita o número máximo de usuários.
+- `DATABASE_URL` é opcional no modo local; há fallback no código.
 - O Google OAuth usa o Client ID configurado na meta tag `google-client-id` em `frontend/index.html`.
 
 ---
@@ -268,7 +296,7 @@ Notas:
 
 O `docker-compose.yml` monta:
 
-- `./data:/app/data` para persistir SQLite.
+- `./data:/app/data` para persistir o SQLite.
 - `./frontend:/app/frontend:ro` para refletir mudanças no frontend sem rebuild.
 
 Subir a aplicação:
@@ -279,11 +307,7 @@ chmod 775 ./data
 docker compose up --build -d
 ```
 
-Acesse:
-
-```text
-http://127.0.0.1:8520
-```
+Acesse: `http://127.0.0.1:8520`
 
 Parar:
 
@@ -295,7 +319,7 @@ docker compose down
 
 ## Testes e Validações
 
-Rodar a suíte:
+Rodar a suíte de testes:
 
 ```bash
 PYTHONPATH=. uv run pytest -q
@@ -320,38 +344,47 @@ node --check frontend/js/investments.js
 
 ### Autenticação
 
-- `POST /api/auth/register`
-- `POST /api/auth/login/step1`
-- `POST /api/auth/login/step2`
-- `POST /api/auth/login/google`
-- `POST /api/auth/reset-password`
-- `POST /api/auth/logout`
+| Método | Rota | Descrição |
+|---|---|---|
+| `POST` | `/api/auth/register` | Cadastro de usuário |
+| `POST` | `/api/auth/login/step1` | Login etapa 1 (senha) |
+| `POST` | `/api/auth/login/step2` | Login etapa 2 (TOTP) |
+| `POST` | `/api/auth/login/google` | Login via Google OAuth |
+| `POST` | `/api/auth/reset-password` | Redefinição de senha |
+| `POST` | `/api/auth/logout` | Logout |
 
 ### Controle Financeiro
 
-- `GET /api/transacoes?ano=YYYY`
-- `POST /api/transacoes/bulk-save?ano=YYYY`
-- `GET /api/transacoes/download`
-- `POST /api/transacoes/upload`
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/api/transacoes?ano=YYYY` | Lista lançamentos do ano |
+| `POST` | `/api/transacoes/bulk-save?ano=YYYY` | Salva todos os lançamentos do ano |
+| `GET` | `/api/transacoes/download` | Exporta CSV completo |
+| `POST` | `/api/transacoes/upload` | Importa CSV (substitui dados) |
 
 ### Carteira de Investimento
 
-- `GET /api/investments`
-- `GET /api/investments/portfolio`
-- `POST /api/investments/upload`
-- `GET /api/investments/download`
-- `POST /api/investments/contribution`
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/api/investments` | Lista ativos da carteira |
+| `GET` | `/api/investments/portfolio` | Dados com cotações e cálculos |
+| `POST` | `/api/investments/upload` | Importa CSV da carteira |
+| `GET` | `/api/investments/download` | Exporta CSV da carteira |
+| `POST` | `/api/investments/contribution` | Confirma aporte sugerido |
 
 ### Auditoria
 
-- `GET /api/audit-logs`
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/api/audit-logs` | Lista eventos de auditoria |
 
 ---
 
 ## Observações de Uso
 
-- A aba **Controle Financeiro** e a aba **Carteira** são áreas independentes da mesma aplicação.
-- Ao alternar para a carteira, filtros e gráficos do controle financeiro são ocultados.
+- A aba **Controle Financeiro** e a aba **Carteira** são áreas independentes; ao alternar, filtros e gráficos da outra área são ocultados.
+- Os cards **Saldo Total do Ano** sempre refletem o ano inteiro, independentemente do filtro de mês selecionado.
+- O comparativo % do **Saldo Total do Ano Projetado** é calculado em relação ao Saldo Total Efetivo do ano anterior, carregado em background após o carregamento principal.
 - O cache das cotações fica em memória; reiniciar o servidor limpa o cache.
 - A consulta ao Yahoo Finance depende de conectividade e disponibilidade externa.
-- Em caso de cache do navegador, os assets usam versão `?v=9`; incremente em `frontend/index.html` quando fizer deploy de mudanças estáticas.
+- Em caso de cache do navegador, os assets usam versão `?v=12`; incremente em `frontend/index.html` ao fazer deploy de mudanças estáticas.

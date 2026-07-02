@@ -19,7 +19,7 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Versão dos assets para cache-busting: incremente manualmente ao deploy (ex: v1 -> v2) -->
-    <link rel="stylesheet" href="css/style.css?v=10">
+    <link rel="stylesheet" href="css/style.css?v=12">
 </head>
 
 <body>
@@ -184,44 +184,19 @@
             <button class="tab-btn" data-tab="tab-carteira"><i class="fa-solid fa-chart-line"></i> Carteira</button>
         </div>
 
-        <!-- Filtros do Controle Financeiro -->
-        <section class="investment-toolbar left-aligned glass financial-only">
-            <div class="toolbar-title">
-                <h2><i class="fa-solid fa-table-list"></i> Controle Financeiro</h2>
-            </div>
-            <div class="control-divider">|</div>
-            <div class="control-group">
-                <label for="select-ano">Ano:</label>
-                <select id="select-ano" class="custom-select"></select>
-            </div>
-            <div class="control-group">
-                <label for="select-mes">Filtrar Visão:</label>
-                <select id="select-mes" class="custom-select">
-                    <option value="Ano Completo">Ano Completo</option>
-                    <option value="Jan">Jan</option>
-                    <option value="Fev">Fev</option>
-                    <option value="Mar">Mar</option>
-                    <option value="Abr">Abr</option>
-                    <option value="Mai">Mai</option>
-                    <option value="Jun">Jun</option>
-                    <option value="Jul">Jul</option>
-                    <option value="Ago">Ago</option>
-                    <option value="Set">Set</option>
-                    <option value="Out">Out</option>
-                    <option value="Nov">Nov</option>
-                    <option value="Dez">Dez</option>
-                </select>
-            </div>
-        </section>
-        <!-- Dashboard Metrics -->
-        <section class="metrics-grid financial-only">
-            <div class="metric-card glass" id="card-saldo-atual">
-                <div class="metric-icon income"><i class="fa-solid fa-wallet"></i></div>
-                <div class="metric-info">
-                    <span class="metric-label" id="label-saldo-atual">Saldo Efetivado</span>
-                    <h2 class="metric-value" id="val-saldo-atual">R$ 0,00</h2>
+        <!-- Gráfico Evolução Mensal (acima das métricas) -->
+        <section class="charts-section-inline financial-only">
+            <div class="chart-card glass main-chart-card">
+                <h3><i class="fa-solid fa-chart-column"></i> Evolução Mensal de Lançamentos</h3>
+                <div class="chart-container">
+                    <canvas id="chart-mensal"></canvas>
                 </div>
             </div>
+        </section>
+
+        <!-- Dashboard Metrics -->
+        <section class="metrics-grid financial-only">
+            <!-- Card 1: Saldo Projetado do mês atual -->
             <div class="metric-card glass" id="card-saldo-projetado">
                 <div class="metric-icon projection"><i class="fa-solid fa-calculator"></i></div>
                 <div class="metric-info">
@@ -230,12 +205,39 @@
                     <span id="val-saldo-projetado-delta" class="metric-delta" title=""></span>
                 </div>
             </div>
+            <!-- Card 2: Saldo Efetivo do mês atual -->
+            <div class="metric-card glass" id="card-saldo-atual">
+                <div class="metric-icon income"><i class="fa-solid fa-wallet"></i></div>
+                <div class="metric-info">
+                    <span class="metric-label" id="label-saldo-atual">Saldo Efetivo</span>
+                    <h2 class="metric-value" id="val-saldo-atual">R$ 0,00</h2>
+                </div>
+            </div>
+            <!-- Card 3: Saldo Total do Ano Projetado -->
+            <div class="metric-card glass" id="card-saldo-ano-projetado">
+                <div class="metric-icon projection-year"><i class="fa-solid fa-chart-line"></i></div>
+                <div class="metric-info">
+                    <span class="metric-label">Saldo Total do Ano Projetado</span>
+                    <h2 class="metric-value" id="val-saldo-ano-projetado">R$ 0,00</h2>
+                    <span id="val-saldo-ano-projetado-delta" class="metric-delta" title=""></span>
+                </div>
+            </div>
+            <!-- Card 4: Saldo Total do Ano Efetivo -->
+            <div class="metric-card glass" id="card-saldo-ano-efetivo">
+                <div class="metric-icon income-year"><i class="fa-solid fa-calendar-check"></i></div>
+                <div class="metric-info">
+                    <span class="metric-label">Saldo Total do Ano Efetivo</span>
+                    <h2 class="metric-value" id="val-saldo-ano-efetivo">R$ 0,00</h2>
+                </div>
+            </div>
         </section>
 
         <!-- Tabs Navigation -->
         <div class="tabs-container">
             <!-- Tab: Editar Lançamentos -->
             <div id="tab-editar" class="tab-content active">
+
+                <!-- Barra de Ações da Tabela (com Ano, Mês, filtros e botões) -->
                 <div class="table-actions glass">
                     <div class="left-actions" style="flex-wrap: wrap; gap: 12px;">
                         <button id="btn-adicionar-linha" class="btn btn-secondary">
@@ -245,6 +247,36 @@
                             <i class="fa-solid fa-wand-magic-sparkles"></i> Propagar
                         </button>
 
+                        <!-- Filtros Ano e Mês (movidos para cá) -->
+                        <div
+                            style="display: flex; gap: 8px; align-items: center; border-left: 1px solid var(--border-color); padding-left: 12px; margin-left: 4px;">
+                            <div class="control-group">
+                                <label for="select-ano" style="font-size: 12px;">Ano:</label>
+                                <select id="select-ano" class="custom-select"
+                                    style="padding: 4px 8px; font-size: 12px;"></select>
+                            </div>
+                            <div class="control-group">
+                                <label for="select-mes" style="font-size: 12px;">Mês:</label>
+                                <select id="select-mes" class="custom-select"
+                                    style="padding: 4px 8px; font-size: 12px;">
+                                    <option value="Ano Completo">Ano Completo</option>
+                                    <option value="Jan">Jan</option>
+                                    <option value="Fev">Fev</option>
+                                    <option value="Mar">Mar</option>
+                                    <option value="Abr">Abr</option>
+                                    <option value="Mai">Mai</option>
+                                    <option value="Jun">Jun</option>
+                                    <option value="Jul">Jul</option>
+                                    <option value="Ago">Ago</option>
+                                    <option value="Set">Set</option>
+                                    <option value="Out">Out</option>
+                                    <option value="Nov">Nov</option>
+                                    <option value="Dez">Dez</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Filtros Tipo e Categoria -->
                         <div
                             style="display: flex; gap: 8px; align-items: center; border-left: 1px solid var(--border-color); padding-left: 12px; margin-left: 4px;">
                             <div class="control-group">
@@ -282,6 +314,7 @@
                     </div>
                 </div>
 
+                <!-- Tabela de Lançamentos -->
                 <div class="table-container glass">
                     <table id="tabela-edicao" class="interactive-table">
                         <thead>
@@ -414,15 +447,8 @@
             </div>
         </div>
 
-        <!-- Charts Section -->
+        <!-- Charts de Detalhamento (abaixo da tabela, fora do tab-editar para manter posição) -->
         <section class="charts-section financial-only">
-            <div class="chart-card glass main-chart-card">
-                <h3><i class="fa-solid fa-chart-column"></i> Evolução Mensal de Lançamentos</h3>
-                <div class="chart-container">
-                    <canvas id="chart-mensal"></canvas>
-                </div>
-            </div>
-
             <div class="detalhamento-header glass">
                 <h3><i class="fa-solid fa-magnifying-glass-dollar"></i> Detalhamento Econômico</h3>
                 <div class="detalhamento-controls">
@@ -459,9 +485,9 @@
 
     <!-- Scripts da Aplicação -->
     <!-- Versão dos assets para forçar refresh quando necessário -->
-    <script src="js/charts.js?v=10"></script>
-    <script src="js/app.js?v=10"></script>
-    <script src="js/investments.js?v=10"></script>
+    <script src="js/charts.js?v=12"></script>
+    <script src="js/app.js?v=12"></script>
+    <script src="js/investments.js?v=12"></script>
 </body>
 
 </html>

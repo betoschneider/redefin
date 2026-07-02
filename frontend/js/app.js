@@ -15,6 +15,7 @@ const LISTA_MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Se
 let anoAtivo = new Date().getFullYear();
 let mesFiltrado = "Ano Completo";
 let dadosPivotados = []; // Estrutura: [{ item, tipo, categoria, meses: {1: {valor, pago}, 2: ...} }]
+let dadosPivotadosAnoAnterior = []; // Dados do ano anterior para comparativo
 let apenasPagosDetalhe = true;
 let tipoDetalheSelecionado = "Despesa";
 let filtroTipoAtivo = "Todos";
@@ -618,11 +619,49 @@ async function carregarDadosDoAno() {
         popularSeletorTipoDetalhe();
         atualizarGraficos();
 
+        // Carrega dados do ano anterior em background para o comparativo
+        carregarDadosAnoAnterior(token);
+
     } catch (e) {
         console.error(e);
         alert("Falha ao buscar lançamentos do servidor.");
     } finally {
         exibirLoading(false);
+    }
+}
+
+// Busca dados do ano anterior para calcular comparativo % do Saldo Total
+async function carregarDadosAnoAnterior(token) {
+    try {
+        const anoAnterior = anoAtivo - 1;
+        const resp = await fetch(`/api/transacoes?ano=${anoAnterior}`, {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (!resp.ok) {
+            dadosPivotadosAnoAnterior = [];
+            atualizarMetricas();
+            return;
+        }
+        const transacoesAnt = await resp.json();
+        // Pivota os dados do ano anterior localmente
+        const mapaAnt = {};
+        transacoesAnt.forEach(t => {
+            const chave = `${t.item.trim()}|||${t.tipo.trim()}|||${t.categoria.trim()}`;
+            if (!mapaAnt[chave]) {
+                mapaAnt[chave] = { item: t.item.trim(), tipo: t.tipo.trim(), categoria: t.categoria.trim(), meses: {} };
+                for (let m = 1; m <= 12; m++) mapaAnt[chave].meses[m] = { valor: 0.0, pago: false };
+            }
+            if (t.mes >= 1 && t.mes <= 12) {
+                mapaAnt[chave].meses[t.mes] = { valor: parseFloat(t.valor) || 0.0, pago: boolValue(t.pago) };
+            }
+        });
+        dadosPivotadosAnoAnterior = Object.values(mapaAnt);
+        // Re-renderiza as métricas agora que temos os dados do ano anterior
+        atualizarMetricas();
+    } catch (e) {
+        console.warn("Não foi possível carregar dados do ano anterior:", e);
+        dadosPivotadosAnoAnterior = [];
+        atualizarMetricas();
     }
 }
 
@@ -744,18 +783,26 @@ function renderizarTabelaEdicao() {
     headerRow.appendChild(thCategoria);
 
     // Colunas de meses filtrados
+    const mesAtualNomeHeader = MESES_MAPA[new Date().getMonth() + 1];
     const mesesAExibir = mesFiltrado === "Ano Completo" ? LISTA_MESES : [mesFiltrado];
     mesesAExibir.forEach(mes => {
         const thMesVal = document.createElement("th");
         thMesVal.textContent = mes;
         thMesVal.style.textAlign = "right";
         thMesVal.style.width = "100px";
+        // Destaca o cabeçalho do mês atual
+        if (mes === mesAtualNomeHeader) {
+            thMesVal.classList.add("th-mes-atual");
+        }
         headerRow.appendChild(thMesVal);
 
         const thMesPago = document.createElement("th");
         // Não exibir título da coluna Pago — cabeçalho intencionalmente vazio
         thMesPago.textContent = "";
         thMesPago.className = "th-pago";
+        if (mes === mesAtualNomeHeader) {
+            thMesPago.classList.add("th-mes-atual");
+        }
         thMesPago.style.textAlign = "left";
         thMesPago.style.width = "40px";
         thMesPago.style.paddingLeft = "6px";
@@ -1017,19 +1064,19 @@ function propagarValores() {
     }
 }
 
-// Atualiza os painéis de métrica (Saldo Atual e Saldo Projetado)
+// Atualiza os painéis de métrica (Saldo Atual, Saldo Projetado e totais do ano)
 function atualizarMetricas() {
     const mesAtualNome = MESES_MAPA[new Date().getMonth() + 1];
     const isAnoCompleto = mesFiltrado === "Ano Completo";
     const mesAlvo = isAnoCompleto ? mesAtualNome : mesFiltrado;
     const numMesAlvo = MAPA_REVERSO_MES[mesAlvo];
 
-    document.getElementById("label-saldo-atual").textContent = `${isAnoCompleto ? 'Mês atual' : mesAlvo}: Saldo Efetivado`;
+    document.getElementById("label-saldo-atual").textContent = `${isAnoCompleto ? 'Mês atual' : mesAlvo}: Saldo Efetivo`;
     document.getElementById("label-saldo-projetado").textContent = `${isAnoCompleto ? 'Mês atual' : mesAlvo}: Saldo Projetado`;
 
+    // --- Cards do mês atual ---
     let totalReceitaAtual = 0;
     let totalNaoReceitaAtual = 0;
-
     let totalReceitaProjetado = 0;
     let totalNaoReceitaProjetado = 0;
 
@@ -1051,24 +1098,21 @@ function atualizarMetricas() {
     const saldoAtual = totalReceitaAtual - totalNaoReceitaAtual;
     const saldoProjetado = totalReceitaProjetado - totalNaoReceitaProjetado;
 
-    // Formata na tela
     const valAtualEl = document.getElementById("val-saldo-atual");
     const valProjEl = document.getElementById("val-saldo-projetado");
 
     valAtualEl.textContent = formatarMoeda(saldoAtual);
     valProjEl.textContent = formatarMoeda(saldoProjetado);
-
     ajustarCorMetrica(valAtualEl, saldoAtual);
     ajustarCorMetrica(valProjEl, saldoProjetado);
 
-    // Exibe comparação percentual do Saldo Projetado vs mês anterior quando "Ano Completo"
+    // Delta % do Saldo Projetado do mês vs mês anterior
     const deltaEl = document.getElementById('val-saldo-projetado-delta');
     if (isAnoCompleto && deltaEl) {
         let numMesPrev = numMesAlvo - 1;
         if (numMesPrev < 1) numMesPrev = 12;
 
-        let prevReceita = 0;
-        let prevNaoReceita = 0;
+        let prevReceita = 0, prevNaoReceita = 0;
         dadosPivotados.forEach(row => {
             const dadosPrev = row.meses[numMesPrev] || { valor: 0.0, pago: false };
             const v = parseFloat(dadosPrev.valor) || 0.0;
@@ -1076,29 +1120,102 @@ function atualizarMetricas() {
             if (tipo === 'receita') prevReceita += v;
             else prevNaoReceita += v;
         });
-
         const prevProjetado = prevReceita - prevNaoReceita;
-
         let percent = null;
         if (Math.abs(prevProjetado) > 0.0001) {
             percent = ((saldoProjetado - prevProjetado) / Math.abs(prevProjetado)) * 100;
         }
-
         if (percent === null) {
             deltaEl.textContent = '—';
-            deltaEl.title = `Comparado ao saldo efetivado do mês anterior: ${formatarMoeda(prevProjetado)}`;
+            deltaEl.title = `Comparado ao saldo projetado do mês anterior: ${formatarMoeda(prevProjetado)}`;
             deltaEl.classList.remove('positive', 'negative');
         } else {
-            const signCls = percent >= 0 ? 'positive' : 'negative';
             deltaEl.textContent = `${percent >= 0 ? '+' : ''}${percent.toFixed(1)}%`;
-            deltaEl.title = `Comparado ao saldo efetivado do mês anterior: ${formatarMoeda(prevProjetado)}\nAtual: ${formatarMoeda(saldoProjetado)} • Diferença: ${percent >= 0 ? '+' : ''}${percent.toFixed(1)}%`;
+            deltaEl.title = `Comparado ao saldo projetado do mês anterior: ${formatarMoeda(prevProjetado)}\nAtual: ${formatarMoeda(saldoProjetado)} • Diferença: ${percent >= 0 ? '+' : ''}${percent.toFixed(1)}%`;
             deltaEl.classList.remove('positive', 'negative');
-            deltaEl.classList.add(signCls);
+            deltaEl.classList.add(percent >= 0 ? 'positive' : 'negative');
         }
     } else if (deltaEl) {
         deltaEl.textContent = '';
         deltaEl.title = '';
         deltaEl.classList.remove('positive', 'negative');
+    }
+
+    // --- Cards Saldo Total do Ano (ignoram filtro de Mês) ---
+    let anoReceitaProj = 0, anoNaoReceitaProj = 0;
+    let anoReceitaEfet = 0, anoNaoReceitaEfet = 0;
+
+    dadosPivotados.forEach(row => {
+        const tipo = row.tipo.trim().toLowerCase();
+        for (let m = 1; m <= 12; m++) {
+            const dm = row.meses[m] || { valor: 0.0, pago: false };
+            const v = parseFloat(dm.valor) || 0.0;
+            const pago = boolValue(dm.pago);
+
+            if (tipo === 'receita') anoReceitaProj += v;
+            else anoNaoReceitaProj += v;
+
+            if (pago) {
+                if (tipo === 'receita') anoReceitaEfet += v;
+                else anoNaoReceitaEfet += v;
+            }
+        }
+    });
+
+    const saldoAnoProj = anoReceitaProj - anoNaoReceitaProj;
+    const saldoAnoEfet = anoReceitaEfet - anoNaoReceitaEfet;
+
+    const valAnoProjEl = document.getElementById('val-saldo-ano-projetado');
+    const valAnoEfetEl = document.getElementById('val-saldo-ano-efetivo');
+
+    if (valAnoProjEl) {
+        valAnoProjEl.textContent = formatarMoeda(saldoAnoProj);
+        ajustarCorMetrica(valAnoProjEl, saldoAnoProj);
+    }
+    if (valAnoEfetEl) {
+        valAnoEfetEl.textContent = formatarMoeda(saldoAnoEfet);
+        ajustarCorMetrica(valAnoEfetEl, saldoAnoEfet);
+    }
+
+    // Delta % do Saldo Total do Ano Projetado vs Saldo Total do Ano Efetivo do ano anterior
+    const deltaAnoEl = document.getElementById('val-saldo-ano-projetado-delta');
+    if (deltaAnoEl) {
+        if (dadosPivotadosAnoAnterior.length === 0) {
+            deltaAnoEl.textContent = '';
+            deltaAnoEl.title = '';
+            deltaAnoEl.classList.remove('positive', 'negative');
+        } else {
+            // Calcula Saldo Total Efetivo do ano anterior
+            let antReceitaEfet = 0, antNaoReceitaEfet = 0;
+            dadosPivotadosAnoAnterior.forEach(row => {
+                const tipo = row.tipo.trim().toLowerCase();
+                for (let m = 1; m <= 12; m++) {
+                    const dm = row.meses[m] || { valor: 0.0, pago: false };
+                    const v = parseFloat(dm.valor) || 0.0;
+                    if (boolValue(dm.pago)) {
+                        if (tipo === 'receita') antReceitaEfet += v;
+                        else antNaoReceitaEfet += v;
+                    }
+                }
+            });
+            const saldoAntEfet = antReceitaEfet - antNaoReceitaEfet;
+
+            let percentAno = null;
+            if (Math.abs(saldoAntEfet) > 0.0001) {
+                percentAno = ((saldoAnoProj - saldoAntEfet) / Math.abs(saldoAntEfet)) * 100;
+            }
+
+            if (percentAno === null) {
+                deltaAnoEl.textContent = '—';
+                deltaAnoEl.title = `Comparado ao Saldo Total Efetivo de ${anoAtivo - 1}: ${formatarMoeda(saldoAntEfet)}`;
+                deltaAnoEl.classList.remove('positive', 'negative');
+            } else {
+                deltaAnoEl.textContent = `${percentAno >= 0 ? '+' : ''}${percentAno.toFixed(1)}% vs ${anoAtivo - 1}`;
+                deltaAnoEl.title = `Saldo Total do Ano Projetado (${anoAtivo}) comparado ao Saldo Total Efetivo de ${anoAtivo - 1}\nAno anterior efetivo: ${formatarMoeda(saldoAntEfet)}\nEste ano projetado: ${formatarMoeda(saldoAnoProj)}\nVariação: ${percentAno >= 0 ? '+' : ''}${percentAno.toFixed(1)}%`;
+                deltaAnoEl.classList.remove('positive', 'negative');
+                deltaAnoEl.classList.add(percentAno >= 0 ? 'positive' : 'negative');
+            }
+        }
     }
 }
 

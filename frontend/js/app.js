@@ -56,10 +56,11 @@ document.addEventListener("DOMContentLoaded", () => {
 // Inicializa os selects de Ano e Event Listeners Básicos
 function inicializarSeletores() {
     const anoAtual = new Date().getFullYear();
+    const anoSeguinte = anoAtual + 1;
     selectAno.innerHTML = "";
     
-    // Janela de anos: Atual - 2 até Atual + 1 (Igual original)
-    const anosOpcoes = [anoAtual - 2, anoAtual - 1, anoAtual, anoAtual + 1];
+    // Janela inicial de anos de forma decrescente (antes do fetch do BD)
+    const anosOpcoes = [anoSeguinte, anoAtual];
     anosOpcoes.forEach(ano => {
         const option = document.createElement("option");
         option.value = ano;
@@ -595,11 +596,61 @@ function alternarTema() {
 }
 
 
+// Atualiza dinamicamente o seletor de anos com base no banco de dados e regras
+async function atualizarSeletorAnos() {
+    const token = obterCookie("session_token");
+    if (!token) return;
+
+    const anoAtual = new Date().getFullYear();
+    const anoSeguinte = anoAtual + 1;
+    let anos = [anoAtual, anoSeguinte];
+
+    try {
+        const response = await fetch("/api/transacoes/anos", {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (response.ok) {
+            const anosDb = await response.json();
+            anosDb.forEach(ano => {
+                const aInt = parseInt(ano);
+                if (!isNaN(aInt) && !anos.includes(aInt)) {
+                    anos.push(aInt);
+                }
+            });
+        }
+    } catch (e) {
+        console.error("Erro ao carregar anos do banco:", e);
+    }
+
+    // Classificar por ordem decrescente
+    anos.sort((a, b) => b - a);
+
+    const valorAntes = selectAno.value;
+    selectAno.innerHTML = "";
+    anos.forEach(ano => {
+        const option = document.createElement("option");
+        option.value = ano;
+        option.textContent = ano;
+        selectAno.appendChild(option);
+    });
+
+    const valorAntesInt = parseInt(valorAntes);
+    if (valorAntes && anos.includes(valorAntesInt)) {
+        selectAno.value = valorAntes;
+        anoAtivo = valorAntesInt;
+    } else {
+        selectAno.value = anoAtual;
+        anoAtivo = anoAtual;
+    }
+}
+
+
 // Carregar transações do backend
 async function carregarDadosDoAno() {
     exibirLoading(true);
     try {
         const token = obterCookie("session_token");
+        await atualizarSeletorAnos();
         const response = await fetch(`/api/transacoes?ano=${anoAtivo}`, {
             headers: { "Authorization": `Bearer ${token}` }
         });

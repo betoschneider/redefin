@@ -615,14 +615,14 @@ th {
 
 /* Destaque do mês atual no cabeçalho da tabela */
 .interactive-table th.th-mes-atual {
-    background-color: rgba(108, 92, 231, 0.22);
+    background-color: #e4dfff;
     color: var(--primary-color);
     border-bottom: 2px solid var(--primary-color);
     font-weight: 700;
 }
 
 body.light-theme .interactive-table th.th-mes-atual {
-    background-color: rgba(108, 92, 231, 0.14);
+    background-color: #f0edff;
     color: var(--primary-color);
 }
 

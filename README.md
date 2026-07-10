@@ -275,6 +275,7 @@ Crie ou edite `.env` conforme necessário:
 DATABASE_URL=sqlite:///./data/controle_financeiro.db
 SECRET_KEY=sua_chave_secreta_aqui
 GOOGLE_CLIENT_ID=seu_client_id_aqui
+GOOGLE_CLIENT_SECRET=seu_client_secret_aqui
 QUOTE_CACHE_TTL=3600
 ACCOUNT_QUOTA=0
 ```
@@ -283,7 +284,8 @@ Notas:
 
 - `ACCOUNT_QUOTA=0` significa sem limite de criação de contas. Qualquer valor positivo limita o número máximo de usuários.
 - `DATABASE_URL` é opcional no modo local; há fallback no código.
-- `GOOGLE_CLIENT_ID` é usado no login Google OAuth.
+- `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` são usados no login Google OAuth (Authorization Code Flow).
+  Obtenha ambos no [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
 - `QUOTE_CACHE_TTL` define o cache de cotações do `yfinance` em segundos.
 
 ---
@@ -406,6 +408,8 @@ uv run python -m compileall app
 1. **Gerenciamento de Sessão em Memória**: Adicionado comentário indicando a necessidade de implementar um sistema robusto de gerenciamento de sessão com armazenamento persistente (Redis, PostgreSQL).
 
 2. **Falta de Validação de `GOOGLE_CLIENT_ID`**: Implementada validação do `aud` (audience) no token Google para garantir que o token seja emitido para a aplicação correta.
+
+3. **Implicit Flow substituído por Authorization Code Flow**: O fluxo antigo (`response_type=id_token`) foi substituído pelo Authorization Code Flow com troca do código no servidor, eliminando a exposição do token no front-end.
 
 3. **Falta de Limite de Taxa para Tentativas de Login**: Adicionado comentário indicando a necessidade de implementar um mecanismo de limite de taxa para evitar ataques de força bruta.
 

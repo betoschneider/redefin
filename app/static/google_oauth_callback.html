@@ -8,17 +8,20 @@
 <script>
 (function(){
   try {
-    const hash = window.location.hash.substring(1);
-    const params = new URLSearchParams(hash);
-    const id_token = params.get('id_token');
-    if (window.opener && id_token) {
-      // Post the token back to the opener window
-      window.opener.postMessage({ type: 'google-id-token', id_token: id_token }, window.location.origin);
+    // Extrai o authorization code da query string (?code=...)
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const state = params.get('state');
+    if (window.opener && code) {
+      window.opener.postMessage(
+        { type: 'google-auth-code', code: code, state: state },
+        window.location.origin
+      );
     }
   } catch (e) {
     console.error('callback error', e);
   }
-  // Close the popup
+  // Fecha o popup
   try { window.close(); } catch(e){}
 })();
 </script>

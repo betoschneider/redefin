@@ -14,6 +14,7 @@ if not SECRET_KEY:
         "SECRET_KEY não configurada. Configure a variável de ambiente SECRET_KEY."
     )
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 QUOTE_CACHE_TTL = int(os.getenv("QUOTE_CACHE_TTL", "3600"))
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})

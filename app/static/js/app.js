@@ -231,7 +231,8 @@ function configurarEventListeners() {
     });
 }
 
-// Inicia fluxo de login com Google: abre popup que redireciona para Google OAuth e recebe id_token via postMessage
+// Inicia fluxo de login com Google: Authorization Code Flow (PKCE implícito via servidor)
+// Abre popup que redireciona para Google OAuth e recebe o authorization code via postMessage
 function iniciarLoginGoogle() {
     const meta = document.querySelector('meta[name="google-client-id"]');
     const clientId = meta ? meta.getAttribute('content') : '';
@@ -241,36 +242,42 @@ function iniciarLoginGoogle() {
     }
 
     const redirect = `${window.location.origin}/google_oauth_callback.html`;
-    const nonce = Math.random().toString(36).slice(2);
-    const scope = encodeURIComponent('openid email profile');
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&response_type=id_token&redirect_uri=${encodeURIComponent(redirect)}&scope=${scope}&nonce=${nonce}`;
+    const scope = 'openid email profile';
+    // O state carrega a origin para o backend montar o redirect_uri corretamente
+    const state = window.location.origin;
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?`
+        + `client_id=${encodeURIComponent(clientId)}`
+        + `&response_type=code`
+        + `&redirect_uri=${encodeURIComponent(redirect)}`
+        + `&scope=${encodeURIComponent(scope)}`
+        + `&state=${encodeURIComponent(state)}`;
 
     const w = window.open(authUrl, 'google_oauth', 'width=600,height=700');
 
     function onMessage(e) {
         if (e.origin !== window.location.origin) return;
         const data = e.data || {};
-        if (data.type === 'google-id-token' && data.id_token) {
+        if (data.type === 'google-auth-code' && data.code) {
             window.removeEventListener('message', onMessage);
             if (w) try { w.close(); } catch(e){}
-            autenticarViaGoogle(data.id_token);
+            autenticarViaGoogle(data.code, data.state || '');
         }
     }
 
     window.addEventListener('message', onMessage);
 }
 
-async function autenticarViaGoogle(id_token) {
+async function autenticarViaGoogle(code, state) {
     exibirLoading(true);
     try {
         const resp = await fetch('/api/auth/login/google', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id_token })
+            body: JSON.stringify({ code, state })
         });
         const data = await resp.json();
         if (resp.ok) {
-            // Assume backend set cookie; close modal and reload data
+            // Backend definiu o cookie de sessão; fecha modal e recarrega
             authModal.classList.remove('active');
             atualizarVisibilidadeBotaoConfig();
             carregarDadosDoAno();

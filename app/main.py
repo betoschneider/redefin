@@ -1,3 +1,5 @@
+import base64
+import json
 import os
 from typing import Optional
 
@@ -12,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app import investments, models, transactions
 from app.auth import criar_sessao, encerrar_sessao, verificar_autenticacao
-from app.config import engine, get_db
+from app.config import engine, get_db, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
 from app.models import User
 from app.transactions import get_user_by_username
 
@@ -212,37 +214,88 @@ def logout(response: Response, session_token: Optional[str] = Cookie(None)):
     return {"message": "Sessão encerrada."}
 
 
+class GoogleLoginRequest(BaseModel):
+    code: str
+    state: str
+
+
 @app.post("/api/auth/login/google")
-def login_google(payload: dict, response: Response, db: Session = Depends(get_db)):
-    id_token = payload.get("id_token")
-    if not id_token:
+def login_google(
+    payload: GoogleLoginRequest, response: Response, db: Session = Depends(get_db)
+):
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="id_token ausente"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Google OAuth não configurado. Configure GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET.",
         )
 
-    try:
-        r = requests.get(
-            "https://oauth2.googleapis.com/tokeninfo",
-            params={"id_token": id_token},
-            timeout=5,
+    code = payload.code
+    if not code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Código de autorização ausente"
         )
-        if r.status_code != 200:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Token Google inválido"
-            )
-        info = r.json()
-        email = info.get("email")
-        if not email:
+
+    # Troca o authorization code por tokens (requer client_secret)
+    try:
+        redirect_uri = f"{payload.state.rstrip('/')}/google_oauth_callback.html"
+        token_resp = requests.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": code,
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+            },
+            timeout=10,
+        )
+        if token_resp.status_code != 200:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token Google inválido: sem email",
+                detail="Falha na troca do código de autorização.",
             )
+        token_data = token_resp.json()
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao validar token Google: {str(e)}",
+            detail=f"Erro na troca do código Google: {str(e)}",
+        )
+
+    # Extrai e decodifica o id_token (JWT) retornado pelo Google
+    id_token = token_data.get("id_token")
+    if not id_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="id_token ausente na resposta do Google.",
+        )
+
+    try:
+        # JWT: header.payload.signature — decodificamos só o payload
+        payload_b64 = id_token.split(".")[1]
+        # Ajusta padding base64
+        payload_b64 += "=" * (4 - len(payload_b64) % 4)
+        decoded = base64.urlsafe_b64decode(payload_b64)
+        info = json.loads(decoded)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Erro ao decodificar id_token: {str(e)}",
+        )
+
+    # Valida claims
+    if info.get("aud") != GOOGLE_CLIENT_ID:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido: audience não corresponde.",
+        )
+
+    email = info.get("email")
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token Google inválido: sem email",
         )
 
     user = get_user_by_username(db, email)

@@ -5,9 +5,6 @@ RUN adduser -D -h /app app
 
 WORKDIR /app
 
-# Cria diretório data com permissão para o usuário app
-RUN mkdir -p /app/data && chown app:app /app/data && chmod 0775 /app/data
-
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 

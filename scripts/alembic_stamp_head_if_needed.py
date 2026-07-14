@@ -39,19 +39,16 @@ def main() -> None:
     row = cur.fetchone()
     if row:
         current_revision = row[0]
-        # Se o banco existente referencia migrações antigas que não existem mais,
-        # limpa o alembic_version e faz stamp para a head atual
         from alembic.script import ScriptDirectory
         config = Config("alembic.ini")
         script = ScriptDirectory.from_config(config)
         head_revision = script.get_current_head()
 
         if current_revision != head_revision:
-            cur.execute("DELETE FROM alembic_version")
-            conn.commit()
+            # Não faz stamp: deixa o alembic upgrade head executar as migrações pendentes
             conn.close()
-            command.stamp(config, "head")
-            print(f"Stamp head aplicado: revisão antiga '{current_revision}' substituída por '{head_revision}'.")
+            print(f"Revisão atual '{current_revision}' diferente da head '{head_revision}'. "
+                  f"Aguardando 'alembic upgrade head' executar as migrações pendentes.")
             return
 
         conn.close()

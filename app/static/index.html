@@ -174,11 +174,7 @@
                 <i class="fa-solid fa-chart-line logo-icon"></i>
                 <h1>RedeFin</h1>
             </div>
-            <div class="header-tabs">
-                <button class="tab-btn active" data-tab="tab-editar"><i class="fa-solid fa-table-list"></i> Controle
-                    Financeiro</button>
-                <button class="tab-btn" data-tab="tab-carteira"><i class="fa-solid fa-chart-line"></i> Carteira</button>
-            </div>
+
             <div class="header-controls">
                 <button id="btn-theme-toggle" class="btn btn-secondary" title="Alternar Tema"><i
                         class="fa-solid fa-moon"></i></button>
@@ -187,24 +183,19 @@
             </div>
         </header>
 
-        <!-- Subtítulo do Controle Financeiro (fora da tab, abaixo do título) -->
-        <div id="subtitle-controle-financeiro" class="subtitle-bar glass">
-            <h2><i class="fa-solid fa-wallet"></i> Controle Financeiro</h2>
-            <button id="btn-settings-redirect" class="btn btn-secondary hidden" title="Gerenciar Categorias"><i
-                    class="fa-solid fa-tags"></i> Gerenciar Categorias</button>
-        </div>
-
-        <!-- Subtítulo da Carteira de Investimento (fora da tab, abaixo do título) -->
-        <div id="subtitle-carteira" class="subtitle-bar glass investment-subtitle hidden">
-            <div class="subtitle-left">
-                <h2><i class="fa-solid fa-chart-line"></i> Carteira de Investimento</h2>
-                <p id="inv-last-updated">Cotações ainda não carregadas.</p>
+        <!-- Subtítulo com alternador entre Controle Financeiro e Carteira -->
+        <div id="subtitle-bar" class="subtitle-bar glass">
+            <div class="subtitle-tabs">
+                <button class="tab-btn active" data-tab="tab-editar"><i class="fa-solid fa-table-list"></i> Controle Financeiro</button>
+                <button class="tab-btn" data-tab="tab-carteira"><i class="fa-solid fa-chart-line"></i> Carteira de Investimento</button>
             </div>
-            <div class="subtitle-right">
-                <button id="btn-inv-refresh" class="btn btn-secondary" title="Atualizar cotações"><i
-                        class="fa-solid fa-rotate"></i></button>
-                <button id="btn-carteira-gerenciar-redirect" class="btn btn-secondary" title="Gerenciar Carteira"><i
-                        class="fa-solid fa-gear"></i> Gerenciar Carteira</button>
+            <div id="subtitle-right-controle" class="subtitle-right">
+                <button id="btn-settings-redirect" class="btn btn-secondary" title="Gerenciar Categorias"><i class="fa-solid fa-tags"></i> Gerenciar Categorias</button>
+            </div>
+            <div id="subtitle-right-carteira" class="subtitle-right hidden">
+                <p id="inv-last-updated">Cotações ainda não carregadas.</p>
+                <button id="btn-inv-refresh" class="btn btn-secondary" title="Atualizar cotações"><i class="fa-solid fa-rotate"></i></button>
+                <button id="btn-carteira-gerenciar-redirect" class="btn btn-secondary" title="Gerenciar Carteira"><i class="fa-solid fa-gear"></i> Gerenciar Carteira</button>
             </div>
         </div>
 

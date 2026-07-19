@@ -219,12 +219,12 @@ function configurarEventListeners() {
 
     // Função para ativar uma aba programaticamente
     function ativarAba(tabId) {
-        const tabBtns = document.querySelectorAll(".header-tabs .tab-btn");
+        const tabBtns = document.querySelectorAll(".subtitle-tabs .tab-btn");
         tabBtns.forEach(b => b.classList.remove("active"));
         document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
         
         // Ativa o botão correspondente
-        const btn = document.querySelector(`.header-tabs .tab-btn[data-tab="${tabId}"]`);
+        const btn = document.querySelector(`.subtitle-tabs .tab-btn[data-tab="${tabId}"]`);
         if (btn) btn.classList.add("active");
         
         // Ativa o conteúdo
@@ -232,9 +232,9 @@ function configurarEventListeners() {
         document.body.classList.toggle("investment-mode", tabId === "tab-carteira" || tabId === "tab-carteira-gerenciar");
         document.body.classList.toggle("settings-mode", tabId === "tab-configuracoes");
         
-        // Mostra/esconde os subtítulos conforme a aba
-        document.getElementById("subtitle-controle-financeiro")?.classList.toggle("hidden", tabId !== "tab-editar");
-        document.getElementById("subtitle-carteira")?.classList.toggle("hidden", tabId !== "tab-carteira");
+        // Mostra/esconde os controles do subtítulo conforme a aba
+        document.getElementById("subtitle-right-controle")?.classList.toggle("hidden", tabId !== "tab-editar");
+        document.getElementById("subtitle-right-carteira")?.classList.toggle("hidden", tabId !== "tab-carteira");
         
         // Re-renderiza para garantir a consistência das tabelas
         if (tabId === "tab-carteira") {
@@ -251,8 +251,8 @@ function configurarEventListeners() {
         atualizarVisibilidadeBotoes();
     }
 
-    // Configuração de abas (apenas botões no header-tabs)
-    const tabBtns = document.querySelectorAll(".header-tabs .tab-btn");
+    // Configuração de abas (botões no subtitle-tabs)
+    const tabBtns = document.querySelectorAll(".subtitle-tabs .tab-btn");
     tabBtns.forEach(btn => {
         btn.addEventListener("click", () => {
             const tabId = btn.getAttribute("data-tab");

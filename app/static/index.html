@@ -19,7 +19,7 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Versão dos assets para cache-busting: incremente manualmente ao deploy (ex: v1 -> v2) -->
-    <link rel="stylesheet" href="css/style.css?v=22">
+    <link rel="stylesheet" href="css/style.css?v=23">
 </head>
 
 <body>
@@ -52,10 +52,20 @@
                     <button id="btn-login-next" class="btn btn-primary btn-block">Avançar</button>
                     <button id="btn-google-login" class="btn btn-google" style="margin-top:8px;">
                         <span id="google-btn-content">
-                            <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.54 28.59A14.5 14.5 0 0 1 9.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.99 23.99 0 0 0 0 24c0 3.77.87 7.35 2.56 10.56l7.98-5.97z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 5.97C6.51 42.62 14.62 48 24 48z"/></svg>
+                            <svg width="18" height="18" viewBox="0 0 48 48">
+                                <path fill="#EA4335"
+                                    d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                                <path fill="#4285F4"
+                                    d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                                <path fill="#FBBC05"
+                                    d="M10.54 28.59A14.5 14.5 0 0 1 9.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.99 23.99 0 0 0 0 24c0 3.77.87 7.35 2.56 10.56l7.98-5.97z" />
+                                <path fill="#34A853"
+                                    d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 5.97C6.51 42.62 14.62 48 24 48z" />
+                            </svg>
                             Login com Google
                         </span>
-                        <img id="google-profile-pic" class="hidden" src="" alt="Foto do Google" style="width:20px;height:20px;border-radius:50%;vertical-align:middle;">
+                        <img id="google-profile-pic" class="hidden" src="" alt="Foto do Google"
+                            style="width:20px;height:20px;border-radius:50%;vertical-align:middle;">
                     </button>
                     <div class="auth-links">
                         <a href="#" id="link-go-register">Criar Conta</a>
@@ -192,20 +202,27 @@
         <!-- Subtítulo com alternador entre Controle Financeiro e Carteira -->
         <div id="subtitle-bar" class="subtitle-bar glass">
             <div class="subtitle-tabs">
-                <button class="tab-btn active" data-tab="tab-editar"><i class="fa-solid fa-table-list"></i> Controle Financeiro</button>
-                <button class="tab-btn" data-tab="tab-carteira"><i class="fa-solid fa-chart-line"></i> Carteira de Investimento</button>
+                <button class="tab-btn active" data-tab="tab-editar"><i class="fa-solid fa-table-list"></i> Controle
+                    Financeiro</button>
+                <button class="tab-btn" data-tab="tab-carteira"><i class="fa-solid fa-chart-line"></i> Carteira de
+                    Investimento</button>
             </div>
             <div id="subtitle-right-controle" class="subtitle-right">
-                <button id="btn-settings-redirect" class="btn btn-secondary" title="Gerenciar Categorias"><i class="fa-solid fa-tags"></i> Gerenciar Categorias</button>
-                <button id="btn-perfil-redirect" class="btn btn-secondary" title="Painel de Controle"><i class="fa-solid fa-user-gear"></i> Painel de Controle</button>
+                <button id="btn-settings-redirect" class="btn btn-secondary" title="Gerenciar Categorias"><i
+                        class="fa-solid fa-tags"></i> Gerenciar Categorias</button>
+                <button id="btn-perfil-redirect" class="btn btn-secondary" title="Painel de Controle"><i
+                        class="fa-solid fa-user-gear"></i> Painel de Controle</button>
             </div>
             <div id="subtitle-right-carteira" class="subtitle-right hidden">
                 <p id="inv-last-updated">Cotações ainda não carregadas.</p>
-                <button id="btn-inv-refresh" class="btn btn-secondary" title="Atualizar cotações"><i class="fa-solid fa-rotate"></i></button>
-                <button id="btn-carteira-gerenciar-redirect" class="btn btn-secondary" title="Gerenciar Carteira"><i class="fa-solid fa-gear"></i> Gerenciar Carteira</button>
+                <button id="btn-inv-refresh" class="btn btn-secondary" title="Atualizar cotações"><i
+                        class="fa-solid fa-rotate"></i></button>
+                <button id="btn-carteira-gerenciar-redirect" class="btn btn-secondary" title="Gerenciar Carteira"><i
+                        class="fa-solid fa-gear"></i> Gerenciar Carteira</button>
             </div>
             <div id="subtitle-right-config" class="subtitle-right hidden">
-                <p style="font-size:14px;color:var(--text-secondary);"><i class="fa-solid fa-sliders"></i> Gerencie suas configurações pessoais</p>
+                <p style="font-size:14px;color:var(--text-secondary);"><i class="fa-solid fa-sliders"></i> Gerencie suas
+                    configurações pessoais</p>
             </div>
         </div>
 
@@ -458,13 +475,17 @@
 
             <!-- Seção de Insights de Investimentos -->
             <div class="chart-card glass" style="margin-top:16px;">
-                <h3><i class="fa-solid fa-brain"></i> Insights de Investimentos <span style="font-size:12px;font-weight:400;color:var(--text-secondary);">(IA)</span></h3>
+                <h3><i class="fa-solid fa-brain"></i> Insights de Investimentos <span
+                        style="font-size:12px;font-weight:400;color:var(--text-secondary);">(IA)</span></h3>
                 <div id="investment-insight-content" class="insight-content">
-                    <p style="color:var(--text-secondary);">Clique no botão abaixo para gerar insights sobre sua carteira de investimentos.</p>
+                    <p style="color:var(--text-secondary);">Clique no botão abaixo para gerar insights sobre sua
+                        carteira de investimentos.</p>
                 </div>
                 <div style="display:flex;gap:8px;margin-top:12px;">
-                    <button id="btn-generate-investment-insight" class="btn btn-primary"><i class="fa-solid fa-wand-magic-sparkles"></i> Gerar Insights de Investimentos</button>
-                    <span id="investment-insight-date" style="font-size:12px;color:var(--text-secondary);align-self:center;"></span>
+                    <button id="btn-generate-investment-insight" class="btn btn-primary"><i
+                            class="fa-solid fa-wand-magic-sparkles"></i> Gerar Insights de Investimentos</button>
+                    <span id="investment-insight-date"
+                        style="font-size:12px;color:var(--text-secondary);align-self:center;"></span>
                 </div>
             </div>
         </div>
@@ -517,13 +538,17 @@
         <!-- Seção de Insights Financeiros -->
         <section class="charts-section financial-only">
             <div class="chart-card glass">
-                <h3><i class="fa-solid fa-brain"></i> Insights Financeiros <span style="font-size:12px;font-weight:400;color:var(--text-secondary);">(IA)</span></h3>
+                <h3><i class="fa-solid fa-brain"></i> Insights Financeiros <span
+                        style="font-size:12px;font-weight:400;color:var(--text-secondary);">(IA)</span></h3>
                 <div id="financial-insight-content" class="insight-content">
-                    <p style="color:var(--text-secondary);">Clique no botão abaixo para gerar insights sobre seus dados financeiros.</p>
+                    <p style="color:var(--text-secondary);">Clique no botão abaixo para gerar insights sobre seus dados
+                        financeiros.</p>
                 </div>
                 <div style="display:flex;gap:8px;margin-top:12px;">
-                    <button id="btn-generate-financial-insight" class="btn btn-primary"><i class="fa-solid fa-wand-magic-sparkles"></i> Gerar Insights Financeiros</button>
-                    <span id="financial-insight-date" style="font-size:12px;color:var(--text-secondary);align-self:center;"></span>
+                    <button id="btn-generate-financial-insight" class="btn btn-primary"><i
+                            class="fa-solid fa-wand-magic-sparkles"></i> Gerar Insights Financeiros</button>
+                    <span id="financial-insight-date"
+                        style="font-size:12px;color:var(--text-secondary);align-self:center;"></span>
                 </div>
             </div>
         </section>
@@ -558,7 +583,10 @@
                                 </tr>
                             </thead>
                             <tbody id="settings-tipos-tbody">
-                                <tr><td colspan="4" style="text-align:center;color:var(--text-secondary);">Carregando...</td></tr>
+                                <tr>
+                                    <td colspan="4" style="text-align:center;color:var(--text-secondary);">Carregando...
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -599,7 +627,10 @@
                                 </tr>
                             </thead>
                             <tbody id="settings-categorias-tbody">
-                                <tr><td colspan="6" style="text-align:center;color:var(--text-secondary);">Carregando...</td></tr>
+                                <tr>
+                                    <td colspan="6" style="text-align:center;color:var(--text-secondary);">Carregando...
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -614,18 +645,22 @@
                     <div class="subtitle-bar glass" style="margin-bottom:16px;">
                         <h2><i class="fa-solid fa-gear"></i> Gerenciar Carteira de Investimento</h2>
                         <div style="display:flex;gap:8px;">
-                            <button id="btn-carteira-gerenciar-download" class="btn btn-secondary" title="Exportar CSV"><i
-                                    class="fa-solid fa-download"></i> Exportar</button>
-                            <button id="btn-carteira-gerenciar-upload-trigger" class="btn btn-secondary" title="Importar CSV"><i
-                                    class="fa-solid fa-upload"></i> Importar</button>
+                            <button id="btn-carteira-gerenciar-download" class="btn btn-secondary"
+                                title="Exportar CSV"><i class="fa-solid fa-download"></i> Exportar</button>
+                            <button id="btn-carteira-gerenciar-upload-trigger" class="btn btn-secondary"
+                                title="Importar CSV"><i class="fa-solid fa-upload"></i> Importar</button>
                             <input type="file" id="btn-carteira-gerenciar-upload" accept=".csv" class="hidden">
                             <button id="btn-carteira-gerenciar-salvar" class="btn btn-primary"><i
                                     class="fa-solid fa-floppy-disk"></i> Salvar</button>
                         </div>
                     </div>
-                    <div id="carteira-gerenciar-disclaimer" class="hidden" style="padding:20px;margin-bottom:16px;border-radius:var(--radius-md);background:rgba(241,196,15,0.12);border:1px solid rgba(241,196,15,0.3);text-align:center;">
-                        <p><i class="fa-solid fa-info-circle"></i> Você ainda não possui nenhum ativo cadastrado na sua carteira de investimento.</p>
-                        <p style="margin-top:8px;color:var(--text-secondary);">Utilize a tabela abaixo para adicionar seus ativos manualmente ou clique em <strong>Importar</strong> para carregar um arquivo CSV.</p>
+                    <div id="carteira-gerenciar-disclaimer" class="hidden"
+                        style="padding:20px;margin-bottom:16px;border-radius:var(--radius-md);background:rgba(241,196,15,0.12);border:1px solid rgba(241,196,15,0.3);text-align:center;">
+                        <p><i class="fa-solid fa-info-circle"></i> Você ainda não possui nenhum ativo cadastrado na sua
+                            carteira de investimento.</p>
+                        <p style="margin-top:8px;color:var(--text-secondary);">Utilize a tabela abaixo para adicionar
+                            seus ativos manualmente ou clique em <strong>Importar</strong> para carregar um arquivo CSV.
+                        </p>
                     </div>
                     <div class="table-container">
                         <table id="tabela-carteira-gerenciar" class="interactive-table">
@@ -641,7 +676,10 @@
                                 </tr>
                             </thead>
                             <tbody id="carteira-gerenciar-tbody">
-                                <tr><td colspan="7" style="text-align:center;color:var(--text-secondary);">Carregando...</td></tr>
+                                <tr>
+                                    <td colspan="7" style="text-align:center;color:var(--text-secondary);">Carregando...
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -661,14 +699,19 @@
                                     </tr>
                                 </thead>
                                 <tbody id="carteira-yield-tbody">
-                                    <tr><td colspan="5" style="text-align:center;color:var(--text-secondary);">Carregando...</td></tr>
+                                    <tr>
+                                        <td colspan="5" style="text-align:center;color:var(--text-secondary);">
+                                            Carregando...</td>
+                                    </tr>
                                 </tbody>
                             </table>
                         </div>
                     </div>
                     <div style="display:flex;justify-content:space-between;margin-top:12px;">
-                        <button id="btn-carteira-gerenciar-adicionar" class="btn btn-secondary"><i class="fa-solid fa-plus"></i> Adicionar Ativo</button>
-                        <button id="btn-carteira-gerenciar-voltar" class="btn btn-secondary"><i class="fa-solid fa-arrow-left"></i> Voltar para Carteira</button>
+                        <button id="btn-carteira-gerenciar-adicionar" class="btn btn-secondary"><i
+                                class="fa-solid fa-plus"></i> Adicionar Ativo</button>
+                        <button id="btn-carteira-gerenciar-voltar" class="btn btn-secondary"><i
+                                class="fa-solid fa-arrow-left"></i> Voltar para Carteira</button>
                     </div>
                 </div>
             </div>
@@ -691,8 +734,10 @@
                             <label for="profile-email">Email</label>
                             <input type="email" id="profile-email" placeholder="seu@email.com">
                         </div>
-                        <button id="btn-save-profile" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Salvar Dados</button>
-                        <span id="profile-save-msg" class="hidden" style="margin-left:8px;color:var(--color-receita);font-size:13px;">Salvo!</span>
+                        <button id="btn-save-profile" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i>
+                            Salvar Dados</button>
+                        <span id="profile-save-msg" class="hidden"
+                            style="margin-left:8px;color:var(--color-receita);font-size:13px;">Salvo!</span>
                     </div>
                 </div>
 
@@ -706,10 +751,13 @@
                         </div>
                         <div class="input-group">
                             <label for="profile-new-password">Nova Senha</label>
-                            <input type="password" id="profile-new-password" placeholder="Nova senha (mín. 6 caracteres)">
+                            <input type="password" id="profile-new-password"
+                                placeholder="Nova senha (mín. 6 caracteres)">
                         </div>
-                        <button id="btn-save-password" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Alterar Senha</button>
-                        <span id="password-save-msg" class="hidden" style="margin-left:8px;color:var(--color-receita);font-size:13px;">Senha alterada!</span>
+                        <button id="btn-save-password" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i>
+                            Alterar Senha</button>
+                        <span id="password-save-msg" class="hidden"
+                            style="margin-left:8px;color:var(--color-receita);font-size:13px;">Senha alterada!</span>
                     </div>
                 </div>
 
@@ -731,14 +779,18 @@
                             <label for="profile-api-key">API Key</label>
                             <input type="password" id="profile-api-key" placeholder="Chave de API do provedor">
                         </div>
-                        <button id="btn-save-ai-config" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Salvar Configuração de IA</button>
-                        <span id="ai-save-msg" class="hidden" style="margin-left:8px;color:var(--color-receita);font-size:13px;">Configuração salva!</span>
+                        <button id="btn-save-ai-config" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i>
+                            Salvar Configuração de IA</button>
+                        <span id="ai-save-msg" class="hidden"
+                            style="margin-left:8px;color:var(--color-receita);font-size:13px;">Configuração
+                            salva!</span>
                     </div>
                 </div>
 
                 <!-- Excluir Conta -->
                 <div class="settings-card glass" style="border: 1px solid var(--color-despesa);">
-                    <h3 style="color:var(--color-despesa);"><i class="fa-solid fa-triangle-exclamation"></i> Excluir Conta</h3>
+                    <h3 style="color:var(--color-despesa);"><i class="fa-solid fa-triangle-exclamation"></i> Excluir
+                        Conta</h3>
                     <div class="settings-form">
                         <p style="color:var(--text-secondary);margin-bottom:12px;">
                             <strong>Atenção:</strong> Esta ação é <strong>irreversível</strong>. Todos os seus dados
@@ -752,7 +804,8 @@
                                 Entendi e confirmo a exclusão permanente da minha conta
                             </label>
                         </div>
-                        <button id="btn-delete-account" class="btn btn-danger-outline" disabled style="margin-top:12px;">
+                        <button id="btn-delete-account" class="btn btn-danger-outline" disabled
+                            style="margin-top:12px;">
                             <i class="fa-solid fa-trash-can"></i> Excluir Minha Conta Permanentemente
                         </button>
                     </div>
@@ -763,7 +816,7 @@
     </div>
 
     <!-- Scripts da Aplicação -->
-    <script src="js/app.js?v=22"></script>
+    <script src="js/app.js?v=23"></script>
 </body>
 
 </html>

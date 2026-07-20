@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.auth import verificar_autenticacao
 from app.config import get_db
 from app.models import (
+    Categoria,
     FinancialInsight,
     InvestmentAsset,
     InvestmentInsight,
@@ -17,6 +18,7 @@ from app.models import (
     User,
 )
 from app.transactions import get_user_by_username
+from app.investments import _fetch_quote
 
 router = APIRouter(prefix="/api/insights", tags=["Insights"])
 
@@ -200,32 +202,96 @@ def _build_financial_prompt(db: Session, user: User) -> str:
             meses[chave][tipo] += t.valor or 0
 
     resumo_meses = []
+    total_receitas = 0.0
+    total_despesas = 0.0
+    total_investimentos = 0.0
+    qtd_meses = 0
+
     for chave in sorted(meses.keys())[-6:]:  # Últimos 6 meses
         m = meses[chave]
         saldo = m["receita"] - m["despesa"] - m["investimento"]
         resumo_meses.append(
             f"- {chave}: Receita=R${m['receita']:.2f}, Despesa=R${m['despesa']:.2f}, "
-            f"Investimento=R${m['investimento']:.2f}, Saldo=R${saldo:.2f}"
+            f"Investimento=R${m['investimento']:.2f}, Saldo Final Líquido=R${saldo:.2f}"
         )
+        total_receitas += m["receita"]
+        total_despesas += m["despesa"]
+        total_investimentos += m["investimento"]
+        qtd_meses += 1
 
-    # Categorias mais frequentes
+    media_receita = total_receitas / qtd_meses if qtd_meses > 0 else 0
+    media_despesa = total_despesas / qtd_meses if qtd_meses > 0 else 0
+    media_investimento = total_investimentos / qtd_meses if qtd_meses > 0 else 0
+    taxa_investimento_media = (total_investimentos / total_receitas * 100) if total_receitas > 0 else 0.0
+    taxa_poupanca_media = ((total_receitas - total_despesas) / total_receitas * 100) if total_receitas > 0 else 0.0
+
+    # Categorias mais frequentes (apenas despesas)
     categorias = {}
     for t in transacoes:
-        if t.categoria:
+        if t.categoria and t.tipo.lower() == "despesa":
             categorias[t.categoria] = categorias.get(t.categoria, 0) + (t.valor or 0)
     top_categorias = sorted(categorias.items(), key=lambda x: -x[1])[:5]
     cat_text = ", ".join([f"{cat}=R${v:.2f}" for cat, v in top_categorias])
 
+    # --- Análise de Metas de Categorias ---
+    # Carrega categorias cadastradas do usuário com suas metas (campo valor)
+    categorias_cadastradas = db.query(Categoria).filter(Categoria.owner_id == user.id).all()
+    mapa_metas = {c.nome.lower(): c.valor for c in categorias_cadastradas}
+
+    # Soma o total por categoria de despesa e a remuneração total nos meses consolidados
+    meses_resumo_chaves = set(sorted(meses.keys())[-6:])
+    categorias_despesas_valores = {}
+    remuneracao_acumulada = 0.0
+
+    for t in transacoes:
+        chave_t = f"{t.ano}-{t.mes:02d}"
+        if chave_t not in meses_resumo_chaves:
+            continue
+
+        valor = t.valor or 0.0
+        if t.tipo.lower() == "despesa" and t.categoria:
+            cat_key = t.categoria.strip()
+            categorias_despesas_valores[cat_key] = categorias_despesas_valores.get(cat_key, 0.0) + valor
+        elif t.tipo.lower() == "receita" and t.categoria and t.categoria.strip().lower() == "remuneração":
+            remuneracao_acumulada += valor
+
+    linhas_metas = []
+    for cat_nome, cat_valor in categorias_despesas_valores.items():
+        meta = mapa_metas.get(cat_nome.lower(), 0.0)
+        # Analisamos apenas se houver meta configurada (> 0)
+        if meta > 0:
+            if remuneracao_acumulada > 0:
+                pct_gasto = (cat_valor / remuneracao_acumulada) * 100
+            else:
+                pct_gasto = 0.0
+
+            desvio = ((pct_gasto - meta) / meta) * 100
+            linhas_metas.append(
+                f"- Categoria: {cat_nome} | Meta: {meta:.1f}% da Remuneração | Gasto Real: R${cat_valor:.2f} ({pct_gasto:.2f}%) | Desvio: {desvio:+.1f}%"
+            )
+
+    texto_metas = ""
+    if linhas_metas:
+        texto_metas = "\n**Comparativo de Metas de Gastos por Categoria (Metas em % da Remuneração vs Gasto Real):**\n" + "\n".join(linhas_metas) + "\n"
+
     prompt = (
-        "Analise os dados financeiros abaixo e gere insights práticos e objetivos.\n\n"
-        f"**Resumo dos últimos meses:**\n"
+        "Você é um planejador financeiro pessoal altamente capacitado. Analise os dados financeiros do usuário nos últimos meses e gere insights profundos, práticos e acionáveis.\n\n"
+        f"**DADOS CONSOLIDADOS (Últimos {qtd_meses} meses analisados):**\n"
+        f"- Média Mensal: Receita = R${media_receita:.2f} | Despesas = R${media_despesa:.2f} | Investimentos = R${media_investimento:.2f}\n"
+        f"- Taxa Média de Poupança (Receita - Despesas): {taxa_poupanca_media:.2f}%\n"
+        f"- Taxa Média de Investimento Direto: {taxa_investimento_media:.2f}%\n\n"
+        f"**Histórico Mensal Detalhado:**\n"
         + "\n".join(resumo_meses)
-        + f"\n\n**Top 5 categorias por valor:**\n{cat_text}"
-        + "\n\nCom base nesses dados, forneça:\n"
-        "1. **Diagnóstico**: Como está a saúde financeira?\n"
-        "2. **Riscos**: Quais pontos merecem atenção?\n"
-        "3. **Recomendações**: Sugestões práticas para melhorar.\n"
-        "Seja direto e use tópicos."
+        + f"\n\n**Top 5 Maiores Categorias de Despesas:**\n{cat_text if cat_text else 'Nenhuma despesa categorizada.'}\n"
+        + texto_metas
+        + "\n"
+        "**DIRETRIZES DA ANÁLISE:**\n"
+        "Com base nesses dados, forneça uma análise estruturada contendo:\n"
+        "1. **Diagnóstico da Saúde Financeira**: Analise o balanço entre receitas, despesas e investimentos. O usuário está gastando mais do que ganha? A taxa de poupança está saudável? Como está a evolução do saldo líquido?\n"
+        "2. **Tendências e Pontos de Atenção (Riscos)**: Identifique se há um crescimento nas despesas ao longo dos meses ou se alguma categoria de gasto está consumindo uma parcela desproporcional do orçamento.\n"
+        "3. **Análise de Metas por Categoria**: Verifique o comparativo de metas enviadas. Aponte claramente quais categorias estouraram o orçamento planejado (desvio positivo) e quais ficaram sob controle. Sugira ações para trazer as categorias estouradas de volta à meta.\n"
+        "4. **Metas e Recomendações Práticas**: Proponha 3 a 4 ações concretas, por exemplo: sugestão de corte em categorias específicas, indicação de aumento na taxa de investimento (ex: mirar em guardar 20% se estiver abaixo), ou estratégias para conter o aumento de gastos se detectada tendência de alta.\n\n"
+        "Seja direto, encorajador, use tópicos e formate a resposta de maneira elegante usando Markdown."
     )
     return prompt
 
@@ -241,17 +307,45 @@ def _build_investment_prompt(db: Session, user: User) -> str:
     if not ativos:
         return "Nenhum ativo de investimento encontrado para gerar insights."
 
-    linhas = []
-    total = 0
+    # Calcula os valores com base na cotação atual
+    detalhes_ativos = []
+    total_mercado = 0.0
+    total_custo = 0.0
+
     for a in ativos:
         qtd = a.quantity or 0
-        preco = a.purchase_price or 0
-        valor_total = qtd * preco
-        total += valor_total
-        meta = a.target or 0
-        linhas.append(
-            f"- {a.ticker} ({a.company}): {qtd} cotas, Preço médio=R${preco:.2f}, "
-            f"Valor total=R${valor_total:.2f}, Meta={meta:.1f}%"
+        preco_compra = a.purchase_price or 0.0
+        custo_total = qtd * preco_compra
+        total_custo += custo_total
+
+        # Preço atual de mercado (cotação do Yahoo Finance)
+        preco_atual = _fetch_quote(a.ticker)
+        if preco_atual is None or preco_atual <= 0:
+            preco_atual = preco_compra
+
+        valor_mercado = qtd * preco_atual
+        total_mercado += valor_mercado
+
+        detalhes_ativos.append({
+            "ticker": a.ticker,
+            "company": a.company,
+            "quantity": qtd,
+            "purchase_price": preco_compra,
+            "current_price": preco_atual,
+            "market_value": valor_mercado,
+            "target": a.target or 0.0,
+            "sector": a.sector or "Não informado",
+            "group": a.group or "Não informado"
+        })
+
+    linhas_ativos = []
+    for d in detalhes_ativos:
+        pct_atual = (d["market_value"] / total_mercado * 100) if total_mercado > 0 else 0.0
+        desvio = pct_atual - d["target"]
+        linhas_ativos.append(
+            f"- Ativo: {d['ticker']} ({d['company']}) | Grupo: {d['group']} | Setor: {d['sector']}\n"
+            f"  Qtd: {d['quantity']} cotas | PM: R${d['purchase_price']:.2f} | Preço Atual: R${d['current_price']:.2f}\n"
+            f"  Vl. Atual: R${d['market_value']:.2f} | Part. Atual: {pct_atual:.2f}% | Meta: {d['target']:.2f}% | Desvio: {desvio:+.2f}%"
         )
 
     # Transações recentes
@@ -264,21 +358,33 @@ def _build_investment_prompt(db: Session, user: User) -> str:
     )
     tx_text = ""
     if txs:
-        tx_text = "\n**Últimas transações:**\n" + "\n".join(
+        tx_text = "\n**Últimas transações de compra realizadas:**\n" + "\n".join(
             [f"- {tx.ticker}: {tx.quantity} cotas a R${tx.purchase_price:.2f}" for tx in txs]
         )
 
+    yield_pct = ((total_mercado / total_custo - 1) * 100) if total_custo > 0 else 0.0
+
     prompt = (
-        "Analise a carteira de investimentos abaixo e gere insights práticos.\n\n"
-        f"**Carteira (valor total: R${total:.2f}):**\n"
-        + "\n".join(linhas)
+        "Você é um assistente especializado em investimentos de renda variável focado em balanceamento de ativos (Asset Allocation) na B3.\n"
+        "Analise a carteira de investimentos abaixo e forneça insights práticos e objetivos.\n\n"
+        f"**DADOS DA CARTEIRA:**\n"
+        f"- Valor Total de Mercado atual: R${total_mercado:.2f}\n"
+        f"- Custo Total de Aquisição: R${total_custo:.2f}\n"
+        f"- Rendimento da Carteira: {yield_pct:+.2f}%\n\n"
+        "**Composição dos Ativos (com metas de balanceamento e desvios):**\n"
+        + "\n".join(linhas_ativos)
         + tx_text
-        + "\n\nCom base nesses dados, forneça:\n"
-        "1. **Diversificação**: A carteira está bem diversificada?\n"
-        "2. **Alocação**: Os percentuais estão alinhados com as metas?\n"
-        "3. **Riscos**: Há concentração excessiva em algum ativo/setor?\n"
-        "4. **Recomendações**: Sugestões práticas para rebalanceamento.\n"
-        "Seja direto e use tópicos."
+        + "\n\n"
+        "**DIRETRIZES IMPORTANTES PARA A ANÁLISE:**\n"
+        "1. Esta carteira é focada em BALANCEAMENTO DE ATIVOS DA B3 (ações, FIIs, ETFs, etc.).\n"
+        "2. NUNCA fale sobre renda fixa (como Selic, Tesouro Direto, CDB, LCI, LCA ou poupança). O foco do usuário para essa carteira é estritamente renda variável e rebalanceamento dela.\n"
+        "3. Identifique quais ativos estão mais subalocados (com maior desvio negativo, ou seja, onde a Alocação Atual está abaixo da Meta) e sugira priorizá-los nos próximos aportes para ajudar a reequilibrar a carteira.\n"
+        "4. A análise deve ser prática, objetiva, livre de jargões desnecessários, organizada em tópicos claros e formatada em Markdown.\n\n"
+        "**ESTRUTURA DA RESPOSTA:**\n"
+        "1. **Análise de Alocação**: Resumo de como os ativos estão distribuídos em comparação com as metas estabelecidas.\n"
+        "2. **Sugestão para os Próximos Aportes**: Indique claramente quais ativos devem ser priorizados nos próximos aportes com base nos desvios negativos, justificando de forma simples.\n"
+        "3. **Riscos e Concentração**: Aponte se há algum ativo muito sobrealocado (desvio positivo alto) ou concentração excessiva em algum setor/grupo.\n"
+        "4. **Recomendações Práticas**: Ações de rebalanceamento inteligentes (priorizar aportes nos subalocados em vez de vender ativos, minimizando custos fiscais)."
     )
     return prompt
 

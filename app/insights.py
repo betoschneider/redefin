@@ -198,6 +198,7 @@ def _build_financial_prompt(db: Session, user: User, ano: Optional[int] = None) 
     categorias_despesa = {}
     categorias_todas = {}
     total_receitas = 0.0
+    total_remuneracao = 0.0
     total_despesas = 0.0
     total_investimentos = 0.0
     total_reservas = 0.0
@@ -236,6 +237,8 @@ def _build_financial_prompt(db: Session, user: User, ano: Optional[int] = None) 
 
         if tipo == "receita":
             total_receitas += valor
+            if t.categoria and t.categoria.strip().lower() == "remuneracao":
+                total_remuneracao += valor
         elif tipo == "despesa":
             total_despesas += valor
         elif tipo == "investimento":
@@ -256,10 +259,12 @@ def _build_financial_prompt(db: Session, user: User, ano: Optional[int] = None) 
     categorias_cadastradas = db.query(Categoria).filter(Categoria.owner_id == user.id).all()
     mapa_metas = {c.nome.lower(): c.valor for c in categorias_cadastradas}
 
+    base_calculo = total_remuneracao if total_remuneracao > 0 else total_receitas
+
     linhas_metas = []
     for cat_nome, cat_valor in sorted(categorias_despesa.items(), key=lambda x: -x[1]):
         meta = mapa_metas.get(cat_nome.lower(), 0.0)
-        pct_receita = (cat_valor / total_receitas * 100) if total_receitas > 0 else 0.0
+        pct_receita = (cat_valor / base_calculo * 100) if base_calculo > 0 else 0.0
         if meta > 0:
             desvio = pct_receita - meta
             alerta = "ACIMA DA META" if desvio > 0 else "DENTRO DA META"
@@ -274,8 +279,8 @@ def _build_financial_prompt(db: Session, user: User, ano: Optional[int] = None) 
     texto_metas = ""
     if linhas_metas:
         texto_metas = (
-            "\nAnalise de Metas por Categoria de Despesa (% da Receita Total):\n"
-            "| Categoria                       | Valor Gasto       | % da Receita | Meta   | Desvio   | Status                |\n"
+            "\nAnalise de Metas por Categoria de Despesa (% sobre a Remuneracao):\n"
+            "| Categoria                       | Valor Gasto       | % Remuneracao | Meta   | Desvio   | Status                |\n"
             "|---------------------------------|-------------------|-------------|--------|----------|-----------------------|\n"
             + "\n".join(linhas_metas)
             + "\n"
@@ -291,8 +296,9 @@ def _build_financial_prompt(db: Session, user: User, ano: Optional[int] = None) 
     texto_despesas = ", ".join([f"{cat}=R${v:.2f}" for cat, v in top_despesas]) if top_despesas else "Nenhuma"
 
     saldo_anual = total_receitas - total_despesas - total_investimentos - total_reservas
-    taxa_poupanca = ((total_receitas - total_despesas) / total_receitas * 100) if total_receitas > 0 else 0.0
-    taxa_investimento = (total_investimentos / total_receitas * 100) if total_receitas > 0 else 0.0
+    base_calculo = total_remuneracao if total_remuneracao > 0 else total_receitas
+    taxa_poupanca = ((base_calculo - total_despesas) / base_calculo * 100) if base_calculo > 0 else 0.0
+    taxa_investimento = (total_investimentos / base_calculo * 100) if base_calculo > 0 else 0.0
 
     prompt = (
         "Voce e um planejador financeiro pessoal altamente capacitado. "
@@ -302,12 +308,13 @@ def _build_financial_prompt(db: Session, user: User, ano: Optional[int] = None) 
         "| Indicador               | Valor           |\n"
         "|-------------------------|-----------------|\n"
         f"| Receita Total           | R${total_receitas:>10.2f} |\n"
+        f"| Remuneracao Total       | R${total_remuneracao:>10.2f} |\n"
         f"| Despesa Total           | R${total_despesas:>10.2f} |\n"
         f"| Investimento Total      | R${total_investimentos:>10.2f} |\n"
         f"| Reserva Total           | R${total_reservas:>10.2f} |\n"
         f"| Saldo Liquido Anual     | R${saldo_anual:>10.2f} |\n"
-        f"| Taxa de Poupanca        | {taxa_poupanca:>9.2f}% |\n"
-        f"| Taxa de Investimento    | {taxa_investimento:>9.2f}% |\n\n"
+        f"| Taxa de Poupanca (sobre Remuneracao) | {taxa_poupanca:>9.2f}% |\n"
+        f"| Taxa de Investimento (sobre Remuneracao) | {taxa_investimento:>9.2f}% |\n\n"
         f"Resumo por Mes (Efetivado/Previsto):\n"
         "| Indicador   | Mes      | Receita         | Despesa         | Investimento     | Reserva          | Saldo            |\n"
         "|-------------|----------|-----------------|-----------------|------------------|------------------|------------------|\n"
@@ -338,6 +345,8 @@ def _build_financial_prompt(db: Session, user: User, ano: Optional[int] = None) 
         "Sugira cortes em categorias especificas com valores faceis, "
         "proponha metas de investimento, ou estrategias para equilibrar o orcamento.\n\n"
         "IMPORTANTE:\n"
+        "- As porcentagens de gastos e metas sao calculadas SOBRE a Remuneracao (categoria de receita), nao sobre a Receita Total\n"
+        "- Exemplo: se a Remuneracao foi R$ 10.000 e a despesa com Alimentacao foi R$ 2.000, entao o gasto representa 20% da Remuneracao\n"
         "- Baseie-se APENAS nos numeros fornecidos acima\n"
         "- NAO invente valores, meses ou categorias que nao estao na tabela\n"
         "- NAO use negrito, italico, hashtags ou qualquer formato de marcacao\n"

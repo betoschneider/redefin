@@ -3431,7 +3431,7 @@ async function carregarInsightFinanceiro() {
     if (!token) return;
 
     try {
-        const resp = await fetch("/api/insights/financial", {
+        const resp = await fetch(`/api/insights/financial?ano=${anoAtivo}`, {
             headers: { "Authorization": `Bearer ${token}` }
         });
         if (resp.ok) {
@@ -3469,7 +3469,7 @@ async function gerarInsightFinanceiro() {
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Gerando...';
 
     try {
-        const resp = await fetch("/api/insights/financial/generate", {
+        const resp = await fetch(`/api/insights/financial/generate?ano=${anoAtivo}`, {
             method: "POST",
             headers: { "Authorization": `Bearer ${token}` }
         });

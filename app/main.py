@@ -21,6 +21,15 @@ from app.transactions import get_user_by_username
 # Cria as tabelas no banco se não existirem (schema sempre atualizado com os modelos)
 Base.metadata.create_all(bind=engine)
 
+# Garante que a coluna 'ano' exista na tabela 'financial_insights' em bancos de dados legados
+from sqlalchemy import text
+with engine.connect() as conn:
+    try:
+        conn.execute(text("ALTER TABLE financial_insights ADD COLUMN ano INTEGER"))
+        conn.commit()
+    except Exception:
+        pass
+
 
 def hash_password(password: str) -> str:
     salt = bcrypt.gensalt()

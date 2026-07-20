@@ -178,120 +178,195 @@ def _call_deepseek(prompt: str, api_key: str) -> str:
         return f"Erro ao chamar DeepSeek: {str(e)}"
 
 
-def _build_financial_prompt(db: Session, user: User) -> str:
-    """Monta o prompt de análise financeira com os dados do usuário."""
+def _build_financial_prompt(db: Session, user: User, ano: Optional[int] = None) -> str:
+    """Monta o prompt de análise financeira com os dados do usuário.
+
+    Regras temporais:
+    - Meses passados: considera apenas efetivados (pago=True)
+    - Meses futuros: considera apenas previstos (pago=False)
+    - Mês atual: considera ambos (efetivado + previsto)
+    """
+    if not ano:
+        ano = datetime.now().year
+
+    # Busca TODAS as transações do ano (sem limit)
     transacoes = (
         db.query(Transacao)
-        .filter(Transacao.owner_id == user.id)
-        .order_by(Transacao.ano.desc(), Transacao.mes.desc())
-        .limit(100)
+        .filter(Transacao.owner_id == user.id, Transacao.ano == ano)
+        .order_by(Transacao.mes, Transacao.item)
         .all()
     )
 
     if not transacoes:
         return "Nenhuma movimentação financeira encontrada para gerar insights."
 
-    # Agrupa por ano/mês
-    meses = {}
-    for t in transacoes:
-        chave = f"{t.ano}-{t.mes:02d}"
-        if chave not in meses:
-            meses[chave] = {"receita": 0, "despesa": 0, "investimento": 0, "reserva": 0}
-        tipo = t.tipo.lower()
-        if tipo in meses[chave]:
-            meses[chave][tipo] += t.valor or 0
+    now = datetime.now()
+    mes_atual = now.month if now.year == ano else 12
 
-    resumo_meses = []
+    # Filtra transações pelas regras temporais e organiza em tabela
+    linhas_tabela = []
+    meses_agregados = {}
+    categorias_despesa = {}
+    categorias_todas = {}
     total_receitas = 0.0
     total_despesas = 0.0
     total_investimentos = 0.0
-    qtd_meses = 0
+    total_reservas = 0.0
 
-    for chave in sorted(meses.keys())[-6:]:  # Últimos 6 meses
-        m = meses[chave]
-        saldo = m["receita"] - m["despesa"] - m["investimento"]
-        resumo_meses.append(
-            f"- {chave}: Receita=R${m['receita']:.2f}, Despesa=R${m['despesa']:.2f}, "
-            f"Investimento=R${m['investimento']:.2f}, Saldo Final Líquido=R${saldo:.2f}"
-        )
-        total_receitas += m["receita"]
-        total_despesas += m["despesa"]
-        total_investimentos += m["investimento"]
-        qtd_meses += 1
-
-    media_receita = total_receitas / qtd_meses if qtd_meses > 0 else 0
-    media_despesa = total_despesas / qtd_meses if qtd_meses > 0 else 0
-    media_investimento = total_investimentos / qtd_meses if qtd_meses > 0 else 0
-    taxa_investimento_media = (total_investimentos / total_receitas * 100) if total_receitas > 0 else 0.0
-    taxa_poupanca_media = ((total_receitas - total_despesas) / total_receitas * 100) if total_receitas > 0 else 0.0
-
-    # Categorias mais frequentes (apenas despesas)
-    categorias = {}
     for t in transacoes:
-        if t.categoria and t.tipo.lower() == "despesa":
-            categorias[t.categoria] = categorias.get(t.categoria, 0) + (t.valor or 0)
-    top_categorias = sorted(categorias.items(), key=lambda x: -x[1])[:5]
-    cat_text = ", ".join([f"{cat}=R${v:.2f}" for cat, v in top_categorias])
+        # Aplica regra temporal
+        if t.mes < mes_atual:
+            # Mês passado: só efetivado
+            if not t.pago:
+                continue
+            status = "Efetivado"
+        elif t.mes > mes_atual:
+            # Mês futuro: só previsto
+            if t.pago:
+                continue
+            status = "Previsto"
+        else:
+            # Mês atual: ambos
+            status = "Efetivado" if t.pago else "Previsto"
 
-    # --- Análise de Metas de Categorias ---
-    # Carrega categorias cadastradas do usuário com suas metas (campo valor)
+        valor = t.valor or 0.0
+        tipo = t.tipo.lower()
+
+        # Linha detalhada da tabela
+        linhas_tabela.append(
+            f"| {t.mes:02d}/{ano} | {t.item[:40]:40s} | {t.categoria[:30]:30s} | {t.tipo[:15]:15s} | R${valor:>10.2f} | {status:11s} |"
+        )
+
+        # Agrega por mês
+        chave_mes = t.mes
+        if chave_mes not in meses_agregados:
+            meses_agregados[chave_mes] = {"receita": 0.0, "despesa": 0.0, "investimento": 0.0, "reserva": 0.0}
+        if tipo in meses_agregados[chave_mes]:
+            meses_agregados[chave_mes][tipo] += valor
+
+        # Categorias de despesa
+        if tipo == "despesa" and t.categoria:
+            categorias_despesa[t.categoria] = categorias_despesa.get(t.categoria, 0.0) + valor
+
+        # Todas as categorias
+        if t.categoria:
+            chave_cat = f"{t.tipo}:{t.categoria}"
+            categorias_todas[chave_cat] = categorias_todas.get(chave_cat, 0.0) + valor
+
+        # Totais
+        if tipo == "receita":
+            total_receitas += valor
+        elif tipo == "despesa":
+            total_despesas += valor
+        elif tipo == "investimento":
+            total_investimentos += valor
+        elif tipo == "reserva":
+            total_reservas += valor
+
+    # --- Monta o resumo mensal ---
+    resumo_meses = []
+    for mes in range(1, 13):
+        if mes in meses_agregados:
+            m = meses_agregados[mes]
+            saldo = m["receita"] - m["despesa"] - m["investimento"] - m["reserva"]
+            indicador = "◉ ATUAL" if mes == mes_atual else ("○ PASSADO" if mes < mes_atual else "◎ FUTURO")
+            resumo_meses.append(
+                f"| {indicador:10s} | {mes:02d}/{ano} | Receita=R${m['receita']:>10.2f} | Despesa=R${m['despesa']:>10.2f} | Investimento=R${m['investimento']:>10.2f} | Reserva=R${m['reserva']:>10.2f} | Saldo=R${saldo:>10.2f} |"
+            )
+
+    # --- Metas de categorias ---
     categorias_cadastradas = db.query(Categoria).filter(Categoria.owner_id == user.id).all()
     mapa_metas = {c.nome.lower(): c.valor for c in categorias_cadastradas}
 
-    # Soma o total por categoria de despesa e a remuneração total nos meses consolidados
-    meses_resumo_chaves = set(sorted(meses.keys())[-6:])
-    categorias_despesas_valores = {}
-    remuneracao_acumulada = 0.0
-
-    for t in transacoes:
-        chave_t = f"{t.ano}-{t.mes:02d}"
-        if chave_t not in meses_resumo_chaves:
-            continue
-
-        valor = t.valor or 0.0
-        if t.tipo.lower() == "despesa" and t.categoria:
-            cat_key = t.categoria.strip()
-            categorias_despesas_valores[cat_key] = categorias_despesas_valores.get(cat_key, 0.0) + valor
-        elif t.tipo.lower() == "receita" and t.categoria and t.categoria.strip().lower() == "remuneração":
-            remuneracao_acumulada += valor
-
+    # Calcula % de cada categoria de despesa em relação à receita total
     linhas_metas = []
-    for cat_nome, cat_valor in categorias_despesas_valores.items():
+    for cat_nome, cat_valor in sorted(categorias_despesa.items(), key=lambda x: -x[1]):
         meta = mapa_metas.get(cat_nome.lower(), 0.0)
-        # Analisamos apenas se houver meta configurada (> 0)
+        pct_receita = (cat_valor / total_receitas * 100) if total_receitas > 0 else 0.0
         if meta > 0:
-            if remuneracao_acumulada > 0:
-                pct_gasto = (cat_valor / remuneracao_acumulada) * 100
-            else:
-                pct_gasto = 0.0
-
-            desvio = ((pct_gasto - meta) / meta) * 100
+            desvio = pct_receita - meta
+            alerta = "🔴 ACIMA DA META" if desvio > 0 else "🟢 DENTRO DA META"
             linhas_metas.append(
-                f"- Categoria: {cat_nome} | Meta: {meta:.1f}% da Remuneração | Gasto Real: R${cat_valor:.2f} ({pct_gasto:.2f}%) | Desvio: {desvio:+.1f}%"
+                f"| {cat_nome:30s} | Gasto R${cat_valor:>10.2f} | {pct_receita:>5.1f}% da Receita | Meta: {meta:.1f}% | Desvio: {desvio:+.1f}pp | {alerta:20s} |"
+            )
+        else:
+            linhas_metas.append(
+                f"| {cat_nome:30s} | Gasto R${cat_valor:>10.2f} | {pct_receita:>5.1f}% da Receita | Meta: --- | --- | --- |"
             )
 
     texto_metas = ""
     if linhas_metas:
-        texto_metas = "\n**Comparativo de Metas de Gastos por Categoria (Metas em % da Remuneração vs Gasto Real):**\n" + "\n".join(linhas_metas) + "\n"
+        texto_metas = (
+            "\n**📊 Análise de Metas por Categoria de Despesa (% da Receita Total):**\n"
+            "| Categoria                       | Valor Gasto       | % da Receita | Meta   | Desvio   | Status                |\n"
+            "|---------------------------------|-------------------|-------------|--------|----------|-----------------------|\n"
+            + "\n".join(linhas_metas)
+            + "\n"
+        )
+
+    # --- Top categorias ---
+    top_receitas = sorted(
+        [(k.split(":")[1], v) for k, v in categorias_todas.items() if k.startswith("receita:")],
+        key=lambda x: -x[1]
+    )[:3]
+    top_despesas = sorted(categorias_despesa.items(), key=lambda x: -x[1])[:5]
+
+    texto_receitas = ", ".join([f"{cat}=R${v:.2f}" for cat, v in top_receitas]) if top_receitas else "Nenhuma"
+    texto_despesas = ", ".join([f"{cat}=R${v:.2f}" for cat, v in top_despesas]) if top_despesas else "Nenhuma"
+
+    saldo_anual = total_receitas - total_despesas - total_investimentos - total_reservas
+    taxa_poupanca = ((total_receitas - total_despesas) / total_receitas * 100) if total_receitas > 0 else 0.0
+    taxa_investimento = (total_investimentos / total_receitas * 100) if total_receitas > 0 else 0.0
 
     prompt = (
-        "Você é um planejador financeiro pessoal altamente capacitado. Analise os dados financeiros do usuário nos últimos meses e gere insights profundos, práticos e acionáveis.\n\n"
-        f"**DADOS CONSOLIDADOS (Últimos {qtd_meses} meses analisados):**\n"
-        f"- Média Mensal: Receita = R${media_receita:.2f} | Despesas = R${media_despesa:.2f} | Investimentos = R${media_investimento:.2f}\n"
-        f"- Taxa Média de Poupança (Receita - Despesas): {taxa_poupanca_media:.2f}%\n"
-        f"- Taxa Média de Investimento Direto: {taxa_investimento_media:.2f}%\n\n"
-        f"**Histórico Mensal Detalhado:**\n"
+        "Você é um planejador financeiro pessoal altamente capacitado. "
+        "Analise os dados financeiros do usuário e gere insights profundos, práticos e acionáveis.\n\n"
+        f"**📋 DADOS DO ANO {ano}**\n\n"
+        f"**Totais Acumulados do Ano:**\n"
+        f"| Indicador               | Valor           |\n"
+        f"|-------------------------|-----------------|\n"
+        f"| Receita Total           | R${total_receitas:>10.2f} |\n"
+        f"| Despesa Total           | R${total_despesas:>10.2f} |\n"
+        f"| Investimento Total      | R${total_investimentos:>10.2f} |\n"
+        f"| Reserva Total           | R${total_reservas:>10.2f} |\n"
+        f"| Saldo Líquido Anual     | R${saldo_anual:>10.2f} |\n"
+        f"| Taxa de Poupança        | {taxa_poupanca:>9.2f}% |\n"
+        f"| Taxa de Investimento    | {taxa_investimento:>9.2f}% |\n\n"
+        f"**📅 Resumo por Mês (○=Efetivado, ◉=Atual, ◎=Previsto):**\n"
+        "| Indicador   | Mês      | Receita         | Despesa         | Investimento     | Reserva          | Saldo            |\n"
+        "|-------------|----------|-----------------|-----------------|------------------|------------------|------------------|\n"
         + "\n".join(resumo_meses)
-        + f"\n\n**Top 5 Maiores Categorias de Despesas:**\n{cat_text if cat_text else 'Nenhuma despesa categorizada.'}\n"
+        + f"\n\n"
+        f"**🔝 Top 3 Fontes de Receita:**\n{texto_receitas}\n\n"
+        f"**🔝 Top 5 Categorias de Despesa:**\n{texto_despesas}\n\n"
         + texto_metas
         + "\n"
+        "**📄 TABELA DETALHADA DE LANÇAMENTOS:**\n"
+        "Abaixo estão todos os lançamentos considerados na análise (já filtrados pelas regras temporais: "
+        "meses passados mostram apenas efetivados, meses futuros mostram apenas previstos, mês atual mostra ambos).\n\n"
+        "```\n"
+        "| Mês     | Item                                      | Categoria                     | Tipo            | Valor         | Status       |\n"
+        "|---------|-------------------------------------------|-------------------------------|-----------------|---------------|--------------|\n"
+        + "\n".join(linhas_tabela)
+        + "\n```\n\n"
         "**DIRETRIZES DA ANÁLISE:**\n"
-        "Com base nesses dados, forneça uma análise estruturada contendo:\n"
-        "1. **Diagnóstico da Saúde Financeira**: Analise o balanço entre receitas, despesas e investimentos. O usuário está gastando mais do que ganha? A taxa de poupança está saudável? Como está a evolução do saldo líquido?\n"
-        "2. **Tendências e Pontos de Atenção (Riscos)**: Identifique se há um crescimento nas despesas ao longo dos meses ou se alguma categoria de gasto está consumindo uma parcela desproporcional do orçamento.\n"
-        "3. **Análise de Metas por Categoria**: Verifique o comparativo de metas enviadas. Aponte claramente quais categorias estouraram o orçamento planejado (desvio positivo) e quais ficaram sob controle. Sugira ações para trazer as categorias estouradas de volta à meta.\n"
-        "4. **Metas e Recomendações Práticas**: Proponha 3 a 4 ações concretas, por exemplo: sugestão de corte em categorias específicas, indicação de aumento na taxa de investimento (ex: mirar em guardar 20% se estiver abaixo), ou estratégias para conter o aumento de gastos se detectada tendência de alta.\n\n"
-        "Seja direto, encorajador, use tópicos e formate a resposta de maneira elegante usando Markdown."
+        "Com base EXCLUSIVAMENTE nos dados reais fornecidos acima, produza uma análise estruturada:\n\n"
+        "1. **Diagnóstico da Saúde Financeira**: Analise o balanço receitas vs despesas vs investimentos. "
+        "O usuário está gastando mais do que ganha? A taxa de poupança está saudável? "
+        "Use valores CONCRETOS dos dados fornecidos (não invente valores).\n\n"
+        "2. **Tendências e Riscos**: Identifique tendências reais nos dados. "
+        "Há crescimento de despesas? Alguma categoria consome % excessivo? "
+        "Destaque valores EXATOS das categorias problemáticas.\n\n"
+        "3. **Análise de Metas**: Compare os gastos reais com as metas configuradas. "
+        "Aponte quais categorias estão dentro ou fora da meta, usando os percentuais fornecidos.\n\n"
+        "4. **Recomendações Práticas**: 3-4 ações concretas baseadas nos dados. "
+        "Sugira cortes em categorias específicas com valores factíveis, "
+        "proponha metas de investimento, ou estratégias para equilibrar o orçamento.\n\n"
+        "**IMPORTANTE:**\n"
+        "- Baseie-se APENAS nos números fornecidos acima\n"
+        "- NÃO invente valores, meses ou categorias que não estão na tabela\n"
+        "- Seja direto, use tópicos e formate em Markdown elegante\n"
+        "- A análise deve refletir EXATAMENTE o que os dados mostram"
     )
     return prompt
 
@@ -400,15 +475,17 @@ class InsightResponse(BaseModel):
 
 @router.get("/financial", response_model=InsightResponse)
 def get_financial_insight(
+    ano: Optional[int] = None,
     db: Session = Depends(get_db),
     username: str = Depends(verificar_autenticacao),
 ):
     """Retorna o último insight financeiro gerado."""
     user = _get_user(db, username)
+    query = db.query(FinancialInsight).filter(FinancialInsight.owner_id == user.id)
+    if ano:
+        query = query.filter(FinancialInsight.ano == ano)
     insight = (
-        db.query(FinancialInsight)
-        .filter(FinancialInsight.owner_id == user.id)
-        .order_by(FinancialInsight.created_at.desc())
+        query.order_by(FinancialInsight.created_at.desc())
         .first()
     )
     if not insight:
@@ -426,15 +503,16 @@ def get_financial_insight(
 
 @router.post("/financial/generate", response_model=InsightResponse)
 def generate_financial_insight(
+    ano: Optional[int] = None,
     db: Session = Depends(get_db),
     username: str = Depends(verificar_autenticacao),
 ):
     """Gera um novo insight financeiro usando IA."""
     user = _get_user(db, username)
-    prompt = _build_financial_prompt(db, user)
+    prompt = _build_financial_prompt(db, user, ano=ano)
     content = _call_ai(prompt, user.ai_provider, user.api_key)
 
-    insight = FinancialInsight(content=content, owner_id=user.id)
+    insight = FinancialInsight(content=content, owner_id=user.id, ano=ano)
     db.add(insight)
     db.commit()
     db.refresh(insight)

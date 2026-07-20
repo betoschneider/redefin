@@ -72,6 +72,7 @@ class FinancialInsight(Base):
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    ano = Column(Integer, nullable=True, index=True)
 
 
 class InvestmentInsight(Base):

@@ -2080,6 +2080,30 @@ function renderInvestmentPortfolio() {
         }
     }
 
+    // Delta latest: variação em relação ao valor anterior
+    const deltaLatestEl = document.getElementById("inv-total-delta-latest");
+    if (deltaLatestEl) {
+        const deltaLatest = metrics.metric_delta_latest;
+        if (deltaLatest !== null && deltaLatest !== undefined) {
+            const signal = deltaLatest >= 0 ? "+" : "";
+            deltaLatestEl.textContent = `${signal}${formatNumber(deltaLatest, 2)}% (vs. anterior)`;
+            deltaLatestEl.style.color = deltaLatest >= 0 ? "#2ecc71" : "#e74c3c";
+        } else {
+            deltaLatestEl.textContent = "";
+        }
+        // Tooltip com data da consulta anterior
+        const lastDate = metrics.last_query_date;
+        if (lastDate) {
+            const d = new Date(lastDate);
+            deltaLatestEl.title = `Consulta anterior: ${d.toLocaleString("pt-BR")}`;
+            if (yieldEl) {
+                yieldEl.title += ` | Consulta anterior: ${d.toLocaleString("pt-BR")}`;
+            }
+        } else {
+            deltaLatestEl.title = "Nenhuma consulta anterior disponível.";
+        }
+    }
+
     const updatedAt = investmentPortfolio?.last_updated ? new Date(investmentPortfolio.last_updated) : null;
     setText("inv-last-updated", updatedAt ? `Última consulta: ${updatedAt.toLocaleString("pt-BR")}` : "Cotações ainda não carregadas.");
 

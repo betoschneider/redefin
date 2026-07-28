@@ -19,7 +19,7 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Versão dos assets para cache-busting: incremente manualmente ao deploy (ex: v1 -> v2) -->
-    <link rel="stylesheet" href="css/style.css?v=28">
+    <link rel="stylesheet" href="css/style.css?v=29">
 </head>
 
 <body>
@@ -380,7 +380,8 @@
                     <div class="metric-info">
                         <span class="metric-label">Patrimônio Total</span>
                         <h2 class="metric-value" id="inv-total">R$ 0,00</h2>
-                        <span id="inv-total-yield" class="metric-delta" style="font-size:0.9rem;"></span>
+                        <span id="inv-total-yield" class="metric-delta" style="font-size:0.9rem;" title=""></span>
+                        <span id="inv-total-delta-latest" class="metric-delta" style="font-size:0.9rem;" title=""></span>
                     </div>
                 </div>
                 <div class="metric-card glass">
@@ -816,7 +817,7 @@
     </div>
 
     <!-- Scripts da Aplicação -->
-    <script src="js/app.js?v=28"></script>
+    <script src="js/app.js?v=29"></script>
 </body>
 
 </html>

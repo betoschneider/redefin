@@ -93,7 +93,9 @@ A área da carteira possui uma leve variação visual (fundo sutilmente azulado 
 
 #### Métricas
 
-- Patrimônio total.
+- **Patrimônio total** — valor total da carteira com base nas cotações atuais.
+  - `metric-delta`: diferença percentual entre o valor atual e o custo médio de compra (tooltip: custo total e data da consulta anterior).
+  - `metric-delta-lastest`: diferença percentual entre o valor atual e o valor registrado na consulta anterior (tooltip: data da consulta anterior).
 - Total de ativos monitorados.
 - Soma das metas.
 

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import verificar_autenticacao
 from app.config import QUOTE_CACHE_TTL, get_db
-from app.models import InvestmentAsset, InvestmentTransaction
+from app.models import InvestmentAsset, InvestmentMetric, InvestmentTransaction
 from app.transactions import get_user_by_username
 
 router = APIRouter(prefix="/api/investments", tags=["Investimentos"])
@@ -206,7 +206,7 @@ def _parse_int(value, default=0):
         return default
 
 
-def _investment_payload(items, db=None):
+def _investment_payload(items, db=None, owner_id=None):
     enriched = []
     total_cost = 0.0
     for item in items:
@@ -253,6 +253,30 @@ def _investment_payload(items, db=None):
     if total_cost > 0 and portfolio_total > 0:
         portfolio_yield = round((portfolio_total / total_cost - 1) * 100, 2)
 
+    # Métrica delta-latest: comparação com o valor anterior
+    metric_delta_latest = 0.0
+    last_query_date = None
+    if db is not None and owner_id is not None:
+        metric = db.query(InvestmentMetric).filter(
+            InvestmentMetric.owner_id == owner_id
+        ).first()
+
+        if metric and metric.last_portfolio_value is not None:
+            prev = metric.last_portfolio_value
+            if prev > 0 and portfolio_total > 0:
+                metric_delta_latest = round((portfolio_total / prev - 1) * 100, 2)
+            last_query_date = metric.last_query_date.isoformat() if metric.last_query_date else None
+        else:
+            metric_delta_latest = 0.0
+
+        # Atualiza para a próxima consulta
+        if metric is None:
+            metric = InvestmentMetric(owner_id=owner_id)
+            db.add(metric)
+        metric.last_portfolio_value = round(portfolio_total, 2)
+        metric.last_query_date = datetime.now()
+        db.commit()
+
     return {
         "assets": enriched,
         "metrics": {
@@ -262,6 +286,8 @@ def _investment_payload(items, db=None):
             "negative_deviation_count": len([item for item in enriched if item["deviation"] < 0]),
             "total_cost": round(total_cost, 2),
             "portfolio_yield": portfolio_yield,
+            "metric_delta_latest": metric_delta_latest,
+            "last_query_date": last_query_date,
         },
         "last_updated": datetime.now().isoformat(),
     }
@@ -294,13 +320,15 @@ def get_investment_portfolio(
     username: str = Depends(verificar_autenticacao),
 ):
     items = list_investments(db, username)
+    user = get_user_by_username(db, username)
+    owner_id = user.id if user else None
 
     # Antes de montar o payload, garante que todo ativo sem preço de compra receba a cotação atual
     for item in items:
         if item.purchase_price is None:
             _ensure_purchase_price(db, item)
 
-    return _investment_payload(items, db)
+    return _investment_payload(items, db, owner_id=owner_id)
 
 
 @router.get("/yield-details")

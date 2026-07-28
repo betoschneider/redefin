@@ -5,6 +5,16 @@ from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, St
 from app.config import Base
 
 
+class InvestmentMetric(Base):
+    """Armazena o último valor patrimonial e data da consulta para calcular delta diário."""
+    __tablename__ = "investment_metrics"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    last_portfolio_value = Column(Float, nullable=True)
+    last_query_date = Column(DateTime, nullable=True)
+
+
 class Transacao(Base):
     __tablename__ = "transacoes"
 

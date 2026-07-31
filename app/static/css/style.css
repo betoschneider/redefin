@@ -1445,6 +1445,30 @@ body.light-theme.investment-mode .app-header {
     margin: 4px 0;
 }
 
+.insight-question {
+    width: 100%;
+    box-sizing: border-box;
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.5;
+    outline: none;
+    resize: vertical;
+    transition: var(--transition-fast);
+}
+
+.insight-question:focus {
+    border-color: var(--primary-color);
+}
+
+.insight-question::placeholder {
+    color: var(--text-secondary);
+}
+
 .header-user-info {
     display: inline-flex;
     align-items: center;

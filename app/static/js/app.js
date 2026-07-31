@@ -3489,13 +3489,19 @@ async function gerarInsightFinanceiro() {
     if (!token) return;
 
     const btn = document.getElementById("btn-generate-financial-insight");
+    const questionEl = document.getElementById("financial-insight-question");
+    const question = questionEl ? questionEl.value.trim() : "";
     btn.disabled = true;
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Gerando...';
 
     try {
         const resp = await fetch(`/api/insights/financial/generate?ano=${anoAtivo}`, {
             method: "POST",
-            headers: { "Authorization": `Bearer ${token}` }
+            headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ question })
         });
         if (resp.status === 401) { realizarLogout(); return; }
         if (!resp.ok) {
@@ -3505,6 +3511,7 @@ async function gerarInsightFinanceiro() {
         }
         const data = await resp.json();
         exibirInsight('financial', data);
+        if (questionEl) questionEl.value = "";
         alert("Insight financeiro gerado com sucesso!");
     } catch (e) {
         console.error(e);
@@ -3520,13 +3527,19 @@ async function gerarInsightInvestimento() {
     if (!token) return;
 
     const btn = document.getElementById("btn-generate-investment-insight");
+    const questionEl = document.getElementById("investment-insight-question");
+    const question = questionEl ? questionEl.value.trim() : "";
     btn.disabled = true;
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Gerando...';
 
     try {
         const resp = await fetch("/api/insights/investment/generate", {
             method: "POST",
-            headers: { "Authorization": `Bearer ${token}` }
+            headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ question })
         });
         if (resp.status === 401) { realizarLogout(); return; }
         if (!resp.ok) {
@@ -3536,6 +3549,7 @@ async function gerarInsightInvestimento() {
         }
         const data = await resp.json();
         exibirInsight('investment', data);
+        if (questionEl) questionEl.value = "";
         alert("Insight de investimento gerado com sucesso!");
     } catch (e) {
         console.error(e);

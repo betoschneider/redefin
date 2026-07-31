@@ -169,7 +169,7 @@ def _call_deepseek(prompt: str, api_key: str) -> str:
         return f"Erro ao chamar DeepSeek: {str(e)}"
 
 
-def _build_financial_prompt(db: Session, user: User, ano: Optional[int] = None) -> str:
+def _build_financial_prompt(db: Session, user: User, ano: Optional[int] = None, question: Optional[str] = None) -> str:
     """Monta o prompt de analise financeira com os dados do usuario.
 
     Regras temporais:
@@ -359,10 +359,19 @@ def _build_financial_prompt(db: Session, user: User, ano: Optional[int] = None) 
         "- Responda EM PORTUGUES DO BRASIL\n"
         "- Sua resposta deve ser APENAS o texto da analise, sem nenhuma formatacao especial"
     )
+
+    # Pergunta/interação do usuário (opcional)
+    if question and question.strip():
+        prompt += (
+            "\n\nPERGUNTA DO USUARIO (responda especificamente a esta pergunta, "
+            "usando os dados fornecidos acima quando aplicavel):\n"
+            f"{question.strip()}\n"
+        )
+
     return prompt
 
 
-def _build_investment_prompt(db: Session, user: User) -> str:
+def _build_investment_prompt(db: Session, user: User, question: Optional[str] = None) -> str:
     """Monta o prompt de analise de investimentos com os dados do usuario."""
     ativos = (
         db.query(InvestmentAsset)
@@ -454,6 +463,15 @@ def _build_investment_prompt(db: Session, user: User) -> str:
         "- Use hifen simples (-) para listar itens\n"
         "- Responda EM PORTUGUES DO BRASIL"
     )
+
+    # Pergunta/interação do usuário (opcional)
+    if question and question.strip():
+        prompt += (
+            "\n\nPERGUNTA DO USUARIO (responda especificamente a esta pergunta, "
+            "usando os dados da carteira fornecidos acima quando aplicavel):\n"
+            f"{question.strip()}\n"
+        )
+
     return prompt
 
 
@@ -522,6 +540,11 @@ class InsightResponse(BaseModel):
     created_at: str
 
 
+class GenerateInsightRequest(BaseModel):
+    """Body opcional com a pergunta/interação do usuário para o prompt de IA."""
+    question: Optional[str] = None
+
+
 @router.get("/financial", response_model=InsightResponse)
 def get_financial_insight(
     ano: Optional[int] = None,
@@ -552,13 +575,15 @@ def get_financial_insight(
 
 @router.post("/financial/generate", response_model=InsightResponse)
 def generate_financial_insight(
+    req: Optional[GenerateInsightRequest] = None,
     ano: Optional[int] = None,
     db: Session = Depends(get_db),
     username: str = Depends(verificar_autenticacao),
 ):
     """Gera um novo insight financeiro usando IA."""
     user = _get_user(db, username)
-    prompt = _build_financial_prompt(db, user, ano=ano)
+    question = req.question if req else None
+    prompt = _build_financial_prompt(db, user, ano=ano, question=question)
     content = _call_ai(prompt, user.ai_provider, user.api_key)
 
     insight = FinancialInsight(content=content, owner_id=user.id, ano=ano)
@@ -600,12 +625,14 @@ def get_investment_insight(
 
 @router.post("/investment/generate", response_model=InsightResponse)
 def generate_investment_insight(
+    req: Optional[GenerateInsightRequest] = None,
     db: Session = Depends(get_db),
     username: str = Depends(verificar_autenticacao),
 ):
     """Gera um novo insight de investimentos usando IA."""
     user = _get_user(db, username)
-    prompt = _build_investment_prompt(db, user)
+    question = req.question if req else None
+    prompt = _build_investment_prompt(db, user, question=question)
     content = _call_ai(prompt, user.ai_provider, user.api_key)
 
     insight = InvestmentInsight(content=content, owner_id=user.id)

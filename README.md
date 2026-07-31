@@ -83,6 +83,12 @@ Abaixo da tabela, com gráficos de:
 - Tema claro/escuro persistido no navegador, com re-renderização automática dos gráficos.
 - Importação/exportação CSV de lançamentos.
 
+#### Insights de IA (Controle Financeiro)
+
+- Geração de análise financeira via IA (OpenAI, Anthropic, Gemini ou DeepSeek) com base nos lançamentos do ano selecionado.
+- **Caixa de diálogo opcional**: o usuário pode escrever uma pergunta (ex.: objetivo financeiro ou recomendação) que é adicionada ao prompt padrão da IA.
+- Se a caixa estiver vazia, o insight é gerado apenas com o prompt padrão.
+
 ---
 
 ### Carteira de Investimento
@@ -134,6 +140,12 @@ Página acessada pelo botão **Gerenciar Carteira** no subtítulo da área de in
 #### CSV
 
 - Importação/exportação CSV da carteira, disponível na página de **Gerenciamento de Carteira**.
+
+#### Insights de IA (Carteira de Investimentos)
+
+- Geração de análise da carteira via IA (OpenAI, Anthropic, Gemini ou DeepSeek) com base nos ativos e metas de alocação.
+- **Caixa de diálogo opcional**: o usuário pode escrever uma pergunta (ex.: qual ativo priorizar no próximo aporte) que é adicionada ao prompt padrão da IA.
+- Se a caixa estiver vazia, o insight é gerado apenas com o prompt padrão.
 
 ---
 
@@ -396,6 +408,15 @@ uv run python -m compileall app
 | `POST` | `/api/investments/upload` | Importa CSV da carteira |
 | `GET` | `/api/investments/download` | Exporta CSV da carteira |
 | `POST` | `/api/investments/contribution` | Confirma aporte sugerido |
+
+### Insights de IA
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/api/insights/financial` | Último insight financeiro gerado |
+| `POST` | `/api/insights/financial/generate` | Gera insight financeiro (body opcional: `{"question": "..."}`) |
+| `GET` | `/api/insights/investment` | Último insight de investimentos gerado |
+| `POST` | `/api/insights/investment/generate` | Gera insight de investimentos (body opcional: `{"question": "..."}`) |
 
 ---
 

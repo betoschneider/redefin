@@ -151,27 +151,36 @@ Página acessada pelo botão **Gerenciar Carteira** no subtítulo da área de in
 
 ## Formatos CSV
 
-### Lançamentos Financeiros
+### Lançamentos Financeiros (Controle Financeiro)
 
-Cabeçalho esperado:
+A exportação gera um **único arquivo CSV** com três seções: `TIPOS`, `CATEGORIAS` e `TRANSACOES`. A importação lê o mesmo formato (também aceita o formato antigo, apenas com a seção de lançamentos).
 
 ```csv
+=== TIPOS ===
+nome,is_protegido
+Receita,True
+Despesa,True
+Investimento,False
+
+=== CATEGORIAS ===
+tipo,nome,valor,is_protegido
+Receita,Remuneração,0.00,True
+Despesa,Alimentação,35.00,False
+
+=== TRANSACOES ===
 Data,Item,Tipo,Categoria,Valor,Pago
-```
-
-Exemplo:
-
-```csv
 01/01/2026,Salário,Receita,Trabalho,5000,True
 01/01/2026,Aluguel,Despesa,Moradia,1500,False
 ```
 
 Observações:
 
-- A importação substitui todos os lançamentos existentes do usuário.
+- A importação substitui todos os lançamentos existentes do usuário e atualiza/cria tipos e categorias conforme o arquivo.
+- Tipos e categorias marcados como protegidos no sistema não são alterados pela importação.
+- Se a seção `TRANSACOES` não estiver presente no arquivo, os lançamentos existentes são mantidos.
 - Datas aceitas incluem `DD/MM/YYYY` e `YYYY-MM-DD`.
 - `Pago` aceita valores como `True`, `False`, `1`, `0`, `pago` e `efetivado`.
-- Valores ausentes ou nulos são tratados como `0.0`.
+- Tamanho máximo do arquivo: 5 MB.
 
 ### Carteira de Investimento
 

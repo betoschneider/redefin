@@ -208,10 +208,8 @@
                     Investimento</button>
             </div>
             <div id="subtitle-right-controle" class="subtitle-right">
-                <button id="btn-settings-redirect" class="btn btn-secondary" title="Gerenciar Categorias"><i
-                        class="fa-solid fa-tags"></i> Gerenciar Categorias</button>
-                <button id="btn-perfil-redirect" class="btn btn-secondary" title="Painel de Controle"><i
-                        class="fa-solid fa-user-gear"></i> Painel de Controle</button>
+                <button id="btn-settings-redirect" class="btn btn-secondary" title="Gerenciar"><i
+                        class="fa-solid fa-tags"></i> Gerenciar</button>
             </div>
             <div id="subtitle-right-carteira" class="subtitle-right hidden">
                 <p id="inv-last-updated">Cotações ainda não carregadas.</p>
@@ -342,14 +340,6 @@
                         </div>
                     </div>
                     <div class="right-actions">
-                        <button id="btn-download-csv" class="btn btn-secondary" title="Exportar CSV Completo">
-                            <i class="fa-solid fa-download"></i> Exportar
-                        </button>
-                        <button id="btn-upload-trigger" class="btn btn-secondary"
-                            title="Importar CSV Completo (Substitui todos os dados)">
-                            <i class="fa-solid fa-upload"></i> Importar
-                        </button>
-                        <input type="file" id="input-upload-csv" accept=".csv" class="hidden">
                         <button id="btn-salvar" class="btn btn-primary">
                             <i class="fa-solid fa-floppy-disk"></i> Salvar
                         </button>
@@ -565,7 +555,23 @@
         <!-- Tab: Configurações -->
         <div id="tab-configuracoes" class="tab-content">
             <div class="settings-container">
-                <h2><i class="fa-solid fa-tags"></i> Gerenciar Categorias</h2>
+                <div class="subtitle-bar glass" style="margin-bottom:16px;">
+                    <h2><i class="fa-solid fa-tags"></i> Gerenciar Categorias</h2>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <button id="btn-download-csv" class="btn btn-secondary"
+                            title="Exportar CSV Completo (lançamentos, tipos e categorias)">
+                            <i class="fa-solid fa-download"></i> Exportar
+                        </button>
+                        <button id="btn-upload-trigger" class="btn btn-secondary"
+                            title="Importar CSV Completo (Substitui lançamentos e atualiza tipos e categorias)">
+                            <i class="fa-solid fa-upload"></i> Importar
+                        </button>
+                        <input type="file" id="input-upload-csv" accept=".csv" class="hidden">
+                        <button id="btn-settings-voltar" class="btn btn-secondary" title="Voltar para Controle Financeiro">
+                            <i class="fa-solid fa-arrow-left"></i> Voltar
+                        </button>
+                    </div>
+                </div>
 
                 <!-- Gerenciamento de Tipos -->
                 <div class="settings-card glass">

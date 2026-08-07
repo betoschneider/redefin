@@ -197,6 +197,14 @@ function configurarEventListeners() {
         });
     }
 
+    // Botão Voltar na seção Gerenciar Categorias
+    const btnVoltarSettings = document.getElementById("btn-settings-voltar");
+    if (btnVoltarSettings) {
+        btnVoltarSettings.addEventListener("click", () => {
+            ativarAba('tab-editar');
+        });
+    }
+
     // Botão Gerenciar Carteira no subtítulo da Carteira
     const btnCarteiraRedirect = document.getElementById("btn-carteira-gerenciar-redirect");
     if (btnCarteiraRedirect) {
@@ -654,7 +662,7 @@ async function exportarCSV() {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `transacoes_financeiras_${anoAtivo}.csv`;
+        a.download = `dados_financeiros_${anoAtivo}.csv`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -671,7 +679,7 @@ async function exportarCSV() {
 async function importarCSV(file) {
     if (!file) return;
 
-    const aviso = "ATENÇÃO: O upload de CSV apagará TODOS os lançamentos existentes no banco de dados e criará novos lançamentos baseados no arquivo. Deseja prosseguir?";
+    const aviso = "ATENÇÃO: O upload de CSV substituirá TODOS os lançamentos existentes e atualizará tipos e categorias conforme o arquivo. Deseja prosseguir?";
     if (!confirm(aviso)) {
         if (inputUploadCsv) inputUploadCsv.value = "";
         return;
@@ -694,7 +702,10 @@ async function importarCSV(file) {
         const data = await response.json();
         if (response.ok) {
             alert(data.message || "Dados importados com sucesso!");
-            carregarDadosDoAno();
+            await Promise.all([
+                carregarDadosDoAno(),
+                carregarSettings(),
+            ]);
         } else {
             alert(`Falha na importação: ${data.detail || "Verifique a formatação do CSV."}`);
         }

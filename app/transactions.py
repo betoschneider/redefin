@@ -215,6 +215,39 @@ def download_csv(
     import io
 
     user = get_user_by_username(db, username)
+    stream = io.StringIO()
+    writer = csv.writer(stream)
+
+    # Seção: Tipos (todos os tipos cadastrados)
+    writer.writerow(["=== TIPOS ==="])
+    writer.writerow(["nome", "is_protegido"])
+    tipos = db.query(Tipo).order_by(Tipo.id).all()
+    mapa_tipos = {t.id: t.nome for t in tipos}
+    for tp in tipos:
+        writer.writerow([tp.nome, "True" if tp.is_protegido else "False"])
+    stream.write("\n")
+
+    # Seção: Categorias do usuário (com nome do tipo em vez do id)
+    writer.writerow(["=== CATEGORIAS ==="])
+    writer.writerow(["tipo", "nome", "valor", "is_protegido"])
+    categorias = []
+    if user:
+        categorias = db.query(Categoria).filter(
+            Categoria.owner_id == user.id
+        ).order_by(Categoria.id).all()
+    for cat in categorias:
+        tipo_nome = mapa_tipos.get(cat.tipo_id, "")
+        writer.writerow([
+            tipo_nome,
+            cat.nome,
+            f"{cat.valor:.2f}",
+            "True" if cat.is_protegido else "False",
+        ])
+    stream.write("\n")
+
+    # Seção: Transações do usuário
+    writer.writerow(["=== TRANSACOES ==="])
+    writer.writerow(["Data", "Item", "Tipo", "Categoria", "Valor", "Pago"])
     transacoes = []
     if user:
         transacoes = db.query(Transacao).filter(Transacao.owner_id == user.id).order_by(
@@ -224,19 +257,47 @@ def download_csv(
             Transacao.categoria,
             Transacao.item,
         ).all()
-
-    stream = io.StringIO()
-    writer = csv.writer(stream)
-    writer.writerow(["Data", "Item", "Tipo", "Categoria", "Valor", "Pago"])
-
     for tx in transacoes:
         data_str = f"01/{tx.mes:02d}/{tx.ano}"
         pago_str = "True" if tx.pago else "False"
         writer.writerow([data_str, tx.item, tx.tipo, tx.categoria, tx.valor, pago_str])
 
     response = StreamingResponse(iter([stream.getvalue()]), media_type="text/csv")
-    response.headers["Content-Disposition"] = "attachment; filename=transacoes.csv"
+    response.headers["Content-Disposition"] = "attachment; filename=dados_financeiros.csv"
     return response
+
+
+def _parse_csv_secoes(decoded: str) -> dict[str, list[list[str]]]:
+    """Divide um CSV multi-seção (marcadores `=== NOME ===`) em {NOME: [linhas]}.
+
+    Cada linha é uma lista de campos (via csv.reader). Se o arquivo não tiver
+    marcadores de seção (formato legado com apenas transações), todas as linhas
+    são retornadas como a seção TRANSACOES.
+    """
+    import csv
+    import io
+
+    linhas = [row for row in csv.reader(io.StringIO(decoded)) if row]
+    if not linhas:
+        return {}
+
+    tem_marcadores = any(
+        row[0].strip().startswith("===") and row[0].strip().endswith("===")
+        for row in linhas
+    )
+    if not tem_marcadores:
+        return {"TRANSACOES": linhas}
+
+    secoes = {}
+    secao_atual = None
+    for row in linhas:
+        primeiro = row[0].strip()
+        if primeiro.startswith("===") and primeiro.endswith("==="):
+            secao_atual = primeiro.strip("= ").strip().upper()
+            secoes.setdefault(secao_atual, [])
+        elif secao_atual:
+            secoes[secao_atual].append(row)
+    return secoes
 
 
 @router.post("/upload")
@@ -245,10 +306,15 @@ def upload_csv(
     db: Session = Depends(get_db),
     username: str = Depends(verificar_autenticacao),
 ):
-    import csv
-    import io
+    # Limite de tamanho para evitar arquivos excessivamente grandes (5 MB)
+    MAX_SIZE = 5 * 1024 * 1024
+    contents = file.file.read(MAX_SIZE + 1)
+    if len(contents) > MAX_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail="Arquivo muito grande. Tamanho máximo permitido: 5 MB.",
+        )
 
-    contents = file.file.read()
     try:
         decoded = contents.decode("utf-8")
     except UnicodeDecodeError:
@@ -257,23 +323,86 @@ def upload_csv(
         except Exception:
             raise HTTPException(status_code=400, detail="Não foi possível decodificar o arquivo.")
 
-    stream = io.StringIO(decoded)
-    try:
-        reader = csv.DictReader(stream)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Formato de CSV inválido.")
+    secoes = _parse_csv_secoes(decoded)
+    if not secoes:
+        raise HTTPException(status_code=400, detail="Arquivo CSV vazio ou inválido.")
 
-    headers = reader.fieldnames
-    if not headers or not all(h in headers for h in ["Data", "Item", "Tipo", "Categoria", "Valor", "Pago"]):
-        raise HTTPException(
-            status_code=400,
-            detail="Cabeçalhos inválidos. O CSV deve conter: Data,Item,Tipo,Categoria,Valor,Pago",
-        )
+    user = get_user_by_username(db, username)
+    if not user:
+        raise HTTPException(status_code=401, detail="Usuário não encontrado.")
 
+    # Garante que os tipos/categorias padrão protegidos existam antes do upsert
+    seed_default_tipos(db)
+    seed_default_categoria(db, user)
+
+    # --- Tipos: cria apenas os que ainda não existem (nunca como protegidos) ---
+    tipos_existentes = {t.nome.strip().lower(): t for t in db.query(Tipo).all()}
+    for row in secoes.get("TIPOS", [])[1:]:
+        nome = row[0].strip() if row else ""
+        if not nome:
+            continue
+        if len(nome) > 50:
+            raise HTTPException(status_code=400, detail=f"Nome de tipo muito longo no CSV: '{nome[:30]}...'")
+        if nome.lower() not in tipos_existentes:
+            novo_tipo = Tipo(nome=nome, is_protegido=False)
+            db.add(novo_tipo)
+            tipos_existentes[nome.lower()] = novo_tipo
+    db.flush()
+
+    # --- Categorias: upsert do usuário (cria faltantes, atualiza existentes não protegidas) ---
+    categorias_existentes = {
+        c.nome.strip().lower(): c
+        for c in db.query(Categoria).filter(Categoria.owner_id == user.id).all()
+    }
+    for row in secoes.get("CATEGORIAS", [])[1:]:
+        if len(row) < 4:
+            continue
+        tipo_nome = row[0].strip()
+        cat_nome = row[1].strip()
+        if not tipo_nome or not cat_nome:
+            continue
+        if len(cat_nome) > 100:
+            raise HTTPException(status_code=400, detail=f"Nome de categoria muito longo no CSV: '{cat_nome[:30]}...'")
+        try:
+            valor = float(row[2].strip())
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Valor inválido na categoria '{cat_nome}': {row[2]}")
+
+        tipo_obj = tipos_existentes.get(tipo_nome.lower())
+        if not tipo_obj:
+            continue
+
+        cat_existente = categorias_existentes.get(cat_nome.lower())
+        if cat_existente:
+            if not cat_existente.is_protegido:
+                cat_existente.valor = valor
+                cat_existente.tipo_id = tipo_obj.id
+        else:
+            nova_cat = Categoria(
+                nome=cat_nome,
+                valor=valor,
+                tipo_id=tipo_obj.id,
+                owner_id=user.id,
+                is_protegido=False,
+            )
+            db.add(nova_cat)
+            categorias_existentes[cat_nome.lower()] = nova_cat
+
+    # --- Transações: valida e substitui apenas se a seção existir no arquivo ---
+    linhas_transacoes = secoes.get("TRANSACOES")
     novas_transacoes = []
-    try:
-        for idx, row in enumerate(reader):
-            data_str = row["Data"].strip()
+    if linhas_transacoes:
+        headers = linhas_transacoes[0]
+        if not all(h.strip() in headers for h in ["Data", "Item", "Tipo", "Categoria", "Valor", "Pago"]):
+            raise HTTPException(
+                status_code=400,
+                detail="Cabeçalhos inválidos. O CSV deve conter: Data,Item,Tipo,Categoria,Valor,Pago",
+            )
+
+        for idx, row in enumerate(linhas_transacoes[1:], start=2):
+            if len(row) < 6:
+                continue
+            data_str = row[0].strip()
             try:
                 dt = datetime.strptime(data_str, "%d/%m/%Y")
             except ValueError:
@@ -285,20 +414,20 @@ def upload_csv(
                     except ValueError:
                         raise HTTPException(
                             status_code=400,
-                            detail=f"Formato de data inválido na linha {idx + 2}: {data_str}. Use DD/MM/YYYY.",
+                            detail=f"Formato de data inválido na linha {idx}: {data_str}. Use DD/MM/YYYY.",
                         )
 
             try:
-                valor = float(row["Valor"].strip())
+                valor = float(row[4].strip())
             except ValueError:
-                raise HTTPException(status_code=400, detail=f"Valor inválido na linha {idx + 2}: {row['Valor']}")
+                raise HTTPException(status_code=400, detail=f"Valor inválido na linha {idx}: {row[4]}")
 
-            pago_str = row["Pago"].strip().lower()
+            pago_str = row[5].strip().lower()
             pago = pago_str in ["true", "1", "t", "yes", "y", "pago", "efetivado"]
 
-            item = row["Item"].strip()
-            tipo = row["Tipo"].strip()
-            categoria = row["Categoria"].strip()
+            item = row[1].strip()
+            tipo = row[2].strip()
+            categoria = row[3].strip()
 
             if item or tipo or categoria:
                 novas_transacoes.append(
@@ -312,68 +441,40 @@ def upload_csv(
                         pago=pago,
                     )
                 )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Erro ao processar CSV: {str(e)}")
 
-    user = get_user_by_username(db, username)
-    if user:
-        # Carregar tipos existentes
-        tipos_existentes = {t.nome.strip().lower(): t for t in db.query(Tipo).all()}
-
-        # Carregar categorias existentes do usuário
-        categorias_existentes = {
-            c.nome.strip().lower(): c
-            for c in db.query(Categoria).filter(Categoria.owner_id == user.id).all()
-        }
-
-        # Iterar sobre novas transações para criar tipos e categorias que faltam
+        # Garante que tipos/categorias citados nas transações existam (compatível com CSVs antigos)
         for tx in novas_transacoes:
             tipo_nome = tx.tipo.strip()
             cat_nome = tx.categoria.strip()
-
             if not tipo_nome or not cat_nome:
                 continue
-
-            tipo_lower = tipo_nome.lower()
-            cat_lower = cat_nome.lower()
-
-            # Garantir existência do Tipo
-            if tipo_lower not in tipos_existentes:
+            if tipo_nome.lower() not in tipos_existentes:
                 novo_tipo = Tipo(nome=tipo_nome, is_protegido=False)
                 db.add(novo_tipo)
-                db.commit()
-                db.refresh(novo_tipo)
-                tipos_existentes[tipo_lower] = novo_tipo
-
-            tipo_obj = tipos_existentes[tipo_lower]
-
-            # Garantir existência da Categoria (com valor float default 0.0)
-            if cat_lower not in categorias_existentes:
+                tipos_existentes[tipo_nome.lower()] = novo_tipo
+            if cat_nome.lower() not in categorias_existentes:
                 nova_cat = Categoria(
                     nome=cat_nome,
                     valor=0.0,
-                    tipo_id=tipo_obj.id,
+                    tipo_id=tipos_existentes[tipo_nome.lower()].id,
                     owner_id=user.id,
-                    is_protegido=False
+                    is_protegido=False,
                 )
                 db.add(nova_cat)
-                db.commit()
-                db.refresh(nova_cat)
-                categorias_existentes[cat_lower] = nova_cat
+                categorias_existentes[cat_nome.lower()] = nova_cat
+        db.flush()
 
-        # Salvar as transações
         db.query(Transacao).filter(Transacao.owner_id == user.id).delete()
         for tx in novas_transacoes:
             tx.owner_id = user.id
         db.add_all(novas_transacoes)
+
     db.commit()
 
     return {
         "success": True,
         "count": len(novas_transacoes),
-        "message": f"{len(novas_transacoes)} lançamentos importados com sucesso.",
+        "message": f"{len(novas_transacoes)} lançamentos importados com sucesso (tipos e categorias atualizados).",
     }
 
 

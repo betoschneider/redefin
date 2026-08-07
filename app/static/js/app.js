@@ -3265,7 +3265,7 @@ function calcularDadosCategoriaComparativo() {
         .map(([catName, catData]) => {
             const meta = mapaMetas[catName.toLowerCase()] || 0;
             const valorPercentual = remuneracaoTotal > 0 ? (catData.valor / remuneracaoTotal) * 100 : 0;
-            const desvio = meta > 0 ? ((valorPercentual - meta) / meta) * 100 : 0;
+            const desvio = meta > 0 ? (valorPercentual - meta) : 0;
             return {
                 categoria: catName,
                 valor: catData.valor,
@@ -3314,7 +3314,7 @@ function renderGraficoCategoriaComparativo(canvas, data) {
             data: {
                 labels: ["Sem dados"],
                 datasets: [{
-                    label: "Desvio (%)",
+                    label: "Desvio (pp)",
                     data: [0],
                     backgroundColor: "rgba(128, 128, 128, 0.3)"
                 }]
@@ -3334,7 +3334,7 @@ function renderGraficoCategoriaComparativo(canvas, data) {
                             color: corTextoSecundarioTema(),
                             font: { family: "Outfit" },
                             callback: function(value) {
-                                return value.toFixed(1) + "%";
+                                return value.toFixed(1) + "pp";
                             }
                         }
                     },
@@ -3407,7 +3407,7 @@ function renderGraficoCategoriaComparativo(canvas, data) {
                             const valorCategoria = cat.valor || 0;
                             const valorPercentual = cat.valor_percentual_remuneracao || 0;
                             const lines = [];
-                            lines.push(` Desvio: ${desvio >= 0 ? '+' : ''}${desvio.toFixed(1)}%`);
+                            lines.push(` Desvio: ${desvio >= 0 ? '+' : ''}${desvio.toFixed(1)}pp`);
                             lines.push(` Meta: ${meta.toFixed(1)}%`);
                             lines.push(` Total da Categoria: ${formatarMoeda(valorCategoria)} (${valorPercentual.toFixed(1)}%)`);
                             return lines;
@@ -3422,7 +3422,7 @@ function renderGraficoCategoriaComparativo(canvas, data) {
                         color: corTextoSecundarioTema(),
                         font: { family: "Outfit" },
                         callback: function(value) {
-                            return (value >= 0 ? "+" : "") + value.toFixed(1) + "%";
+                            return (value >= 0 ? "+" : "") + value.toFixed(1) + "pp";
                         }
                     }
                 },

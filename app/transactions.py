@@ -445,13 +445,14 @@ def get_categoria_comparativo(
         else:
             valor_percentual_remuneracao = 0.0
 
-        # Desvio do planejado (percentual da meta)
-        # Ex: meta = 10%, valor_percentual_remuneracao = 13%.
-        # Desvio = ((13 - 10) / 10) * 100 = 30%.
+        # Desvio em pontos percentuais (pp): diferença entre o % real e a meta
+        # Ex: meta = 10%, valor_percentual_remuneracao = 13%. Desvio = +3pp.
         if meta > 0:
-            desvio = ((valor_percentual_remuneracao - meta) / meta) * 100
+            desvio = valor_percentual_remuneracao - meta
+            desvio_percentual = ((valor_percentual_remuneracao - meta) / meta) * 100
         else:
             desvio = 0.0
+            desvio_percentual = 0.0
 
         result_data.append({
             "categoria": cat_nome,
@@ -460,7 +461,7 @@ def get_categoria_comparativo(
             "valor_percentual_remuneracao": round(valor_percentual_remuneracao, 2),
             "meta": round(meta, 2),
             "desvio": round(desvio, 2),
-            "desvio_percentual": round(desvio, 2),
+            "desvio_percentual": round(desvio_percentual, 2),
         })
 
     return {

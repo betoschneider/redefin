@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
@@ -16,6 +17,13 @@ if not SECRET_KEY:
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 QUOTE_CACHE_TTL = int(os.getenv("QUOTE_CACHE_TTL", "3600"))
+
+# SQLite não cria diretórios automaticamente: garante que o diretório do
+# banco exista antes de criar o engine (cobre execução local e Docker).
+if DATABASE_URL.startswith("sqlite:///"):
+    db_path = DATABASE_URL.removeprefix("sqlite:///")
+    if db_path and db_path != ":memory:":
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app import insights, investments, models, profile, transactions
 from app.auth import criar_sessao, encerrar_sessao, verificar_autenticacao
-from app.config import engine, get_db, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+from app.config import Base, engine, get_db, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
 from app.models import User
 from app.transactions import get_user_by_username
 
@@ -57,6 +57,34 @@ def _stamp_se_necessario(cfg: Config) -> None:
         command.stamp(cfg, "head")
 
 
+def _sincronizar_esquema() -> None:
+    """Bancos legados (criados por create_all e sem migrations) podem não ter
+    tabelas/colunas mais recentes do modelo: completa o que faltar.
+
+    As colunas adicionadas são sempre nullable (equivalentes às que as
+    migrations adicionam). Chamado depois do upgrade para cobrir o caso de
+    bancos não versionados que foram marcados (stamped) na head.
+    """
+    from sqlalchemy import inspect, text
+
+    # Cria tabelas que faltam (checkfirst=True por padrão, seguro)
+    Base.metadata.create_all(bind=engine)
+
+    insp = inspect(engine)
+    with engine.begin() as conn:
+        for tabela in Base.metadata.sorted_tables:
+            if tabela.name not in insp.get_table_names():
+                continue
+            existentes = {c["name"] for c in insp.get_columns(tabela.name)}
+            for col in tabela.columns:
+                if col.name in existentes or col.nullable is False:
+                    continue
+                tipo = col.type.compile(engine.dialect)
+                conn.execute(
+                    text(f"ALTER TABLE {tabela.name} ADD COLUMN {col.name} {tipo}")
+                )
+
+
 def rodar_migrations() -> None:
     """Cria/atualiza o banco aplicando as migrations do alembic.
 
@@ -66,6 +94,8 @@ def rodar_migrations() -> None:
     cfg = Config(str(BASE_DIR / "alembic.ini"))
     _stamp_se_necessario(cfg)
     command.upgrade(cfg, "head")
+    # Bancos antigos não versionados podem ter schema desatualizado: completa
+    _sincronizar_esquema()
 
 
 rodar_migrations()

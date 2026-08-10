@@ -6,13 +6,21 @@ from app.config import Base
 
 
 class InvestmentMetric(Base):
-    """Armazena o último valor patrimonial e data da consulta para calcular delta diário."""
+    """Armazena métricas da carteira para calcular o delta diário.
+
+    - last_portfolio_value/last_query_date: referência do dia anterior (congelada)
+      durante o dia, usada para o delta "vs. dia anterior".
+    - current_value/current_date: última consulta feita (hoje ou ontem);
+      promovida a referência na primeira consulta de um novo dia.
+    """
     __tablename__ = "investment_metrics"
 
     id = Column(Integer, primary_key=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     last_portfolio_value = Column(Float, nullable=True)
     last_query_date = Column(DateTime, nullable=True)
+    current_value = Column(Float, nullable=True)
+    current_date = Column(DateTime, nullable=True)
 
 
 class Transacao(Base):

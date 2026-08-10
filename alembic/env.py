@@ -11,10 +11,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False preserva os loggers da aplicação (ex: uvicorn)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
-from app.config import Base  # noqa: E402
+from app.config import Base, DATABASE_URL  # noqa: E402
 import app.models  # noqa: E402, F401
+
+# Usa a mesma DATABASE_URL do runtime (env var tem prioridade sobre o alembic.ini)
+config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
 target_metadata = Base.metadata
 

@@ -289,7 +289,9 @@ uv run alembic upgrade head
 
 > Por padrão, o app usa `sqlite:///./data/controle_financeiro.db`.
 >
-> **Nota**: As migrações foram unificadas em um único arquivo (`bb8a7514b4ee_banco_unificado_v1.py`). Se você já possui um banco de dados com migrações antigas, o script `scripts/alembic_stamp_head_if_needed.py` (executado automaticamente no Docker) fará o stamp para a nova head.
+> **Nota**: As migrations são aplicadas automaticamente no startup do servidor (`app/main.py`), então
+> basta rodar o servidor. O `alembic upgrade head` manual é opcional. Bancos antigos criados por
+> `create_all` (sem `alembic_version`) são detectados e marcados automaticamente antes do upgrade.
 
 ### 5. Rodar o servidor
 
@@ -335,6 +337,20 @@ Notas:
 O `docker-compose.yml` monta:
 
 - `./data:/app/data` para persistir o SQLite.
+
+As migrations são aplicadas automaticamente no startup da aplicação (dentro do container),
+então um banco do zero é criado com o schema completo via alembic.
+
+> **Permissões do volume**: o container roda como usuário não-root de **UID 1000**.
+> O diretório `./data` no host precisa ser gravável por esse UID. Se o dono do
+> `./data` no host tiver outro UID, ajuste com:
+>
+> ```bash
+> sudo chown -R 1000:1000 ./data
+> ```
+>
+> (O `chmod 775 ./data` do passo abaixo só é suficiente se o UID 1000 for dono
+> ou estiver no grupo do diretório.)
 
 Subir a aplicação:
 

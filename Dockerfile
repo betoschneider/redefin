@@ -1,7 +1,8 @@
 FROM ghcr.io/astral-sh/uv:python3.12-alpine
 
-# Cria usuário não-root para rodar a aplicação
-RUN adduser -D -h /app app
+# Cria usuário não-root (UID 1000) para rodar a aplicação.
+# O volume ./data do docker-compose deve ser gravável por este UID no host.
+RUN adduser -D -u 1000 -h /app app
 
 WORKDIR /app
 
@@ -11,10 +12,12 @@ RUN uv sync --frozen --no-dev
 # Cria diretório data/ para o banco SQLite
 RUN mkdir -p /app/data
 
+COPY alembic.ini ./
+COPY alembic/ ./alembic/
 COPY app/ ./app/
 
-# Garante que os arquivos da aplicação e data pertencem ao usuário app
-RUN chown -R app:app /app/app /app/data
+# Garante que os arquivos da aplicação, migrations e data pertencem ao usuário app
+RUN chown -R app:app /app/app /app/data /app/alembic /app/alembic.ini
 
 USER app
 

@@ -253,7 +253,9 @@ def _investment_payload(items, db=None, owner_id=None):
     if total_cost > 0 and portfolio_total > 0:
         portfolio_yield = round((portfolio_total / total_cost - 1) * 100, 2)
 
-    # Métrica delta-latest: comparação com o valor anterior
+    # Métrica delta-latest: variação do patrimônio em relação à última consulta do dia anterior.
+    # A referência (last_*) fica congelada durante o dia; o último valor consultado (current_*)
+    # é promovido a referência na primeira consulta de um novo dia.
     metric_delta_latest = 0.0
     last_query_date = None
     if db is not None and owner_id is not None:
@@ -261,20 +263,26 @@ def _investment_payload(items, db=None, owner_id=None):
             InvestmentMetric.owner_id == owner_id
         ).first()
 
-        if metric and metric.last_portfolio_value is not None:
+        agora = datetime.now()
+        if metric is None:
+            metric = InvestmentMetric(owner_id=owner_id)
+            db.add(metric)
+            metric.current_value = round(portfolio_total, 2)
+            metric.current_date = agora
+        else:
+            # Virada de dia: o último valor guardado é a última consulta do dia
+            # anterior e passa a ser a referência para as consultas de hoje
+            if metric.current_date is None or metric.current_date.date() != agora.date():
+                metric.last_portfolio_value = metric.current_value
+                metric.last_query_date = metric.current_date
+            metric.current_value = round(portfolio_total, 2)
+            metric.current_date = agora
+
+        if metric.last_portfolio_value:
             prev = metric.last_portfolio_value
             if prev > 0 and portfolio_total > 0:
                 metric_delta_latest = round((portfolio_total / prev - 1) * 100, 2)
             last_query_date = metric.last_query_date.isoformat() if metric.last_query_date else None
-        else:
-            metric_delta_latest = 0.0
-
-        # Atualiza para a próxima consulta
-        if metric is None:
-            metric = InvestmentMetric(owner_id=owner_id)
-            db.add(metric)
-        metric.last_portfolio_value = round(portfolio_total, 2)
-        metric.last_query_date = datetime.now()
         db.commit()
 
     return {

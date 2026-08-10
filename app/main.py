@@ -1,11 +1,14 @@
 import base64
 import json
 import os
+from pathlib import Path
 from typing import Optional
 
 import bcrypt
 import pyotp
 import requests
+from alembic import command
+from alembic.config import Config
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -14,21 +17,58 @@ from sqlalchemy.orm import Session
 
 from app import insights, investments, models, profile, transactions
 from app.auth import criar_sessao, encerrar_sessao, verificar_autenticacao
-from app.config import Base, engine, get_db, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+from app.config import engine, get_db, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
 from app.models import User
 from app.transactions import get_user_by_username
 
-# Cria as tabelas no banco se não existirem (schema sempre atualizado com os modelos)
-Base.metadata.create_all(bind=engine)
 
-# Garante que a coluna 'ano' exista na tabela 'financial_insights' em bancos de dados legados
-from sqlalchemy import text
-with engine.connect() as conn:
-    try:
-        conn.execute(text("ALTER TABLE financial_insights ADD COLUMN ano INTEGER"))
-        conn.commit()
-    except Exception:
-        pass
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def _stamp_se_necessario(cfg: Config) -> None:
+    """Bancos antigos criados por create_all (sem versão do alembic) já estão
+    com o schema completo: marca a head para o upgrade não tentar recriar
+    tabelas existentes."""
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    tabelas = set(insp.get_table_names())
+    if not tabelas:
+        return  # banco novo: o upgrade cria tudo do zero
+
+    tem_versao = "alembic_version" in tabelas
+    if tem_versao:
+        with engine.connect() as conn:
+            tem_versao = conn.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).fetchone() is not None
+    if tem_versao:
+        return
+
+    # Banco não versionado: só marca a head se tiver o schema completo
+    # (equivalente ao que o create_all produzia); caso contrário, o upgrade
+    # roda as migrations normalmente (banco vazio/incompleto).
+    tabelas_modelo = {
+        "users", "transacoes", "investment_assets", "investment_metrics",
+        "investment_transactions", "categorias", "tipos",
+        "financial_insights", "investment_insights",
+    }
+    if tabelas_modelo.issubset(tabelas):
+        command.stamp(cfg, "head")
+
+
+def rodar_migrations() -> None:
+    """Cria/atualiza o banco aplicando as migrations do alembic.
+
+    Garante que um banco criado do zero passe por todas as migrations
+    (schema sempre versionado), em vez de usar create_all.
+    """
+    cfg = Config(str(BASE_DIR / "alembic.ini"))
+    _stamp_se_necessario(cfg)
+    command.upgrade(cfg, "head")
+
+
+rodar_migrations()
 
 
 def hash_password(password: str) -> str:

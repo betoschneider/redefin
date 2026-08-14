@@ -1526,3 +1526,43 @@ body.light-theme.investment-mode .app-header {
         font-size: 16px;
     }
 }
+
+/* Evolução da Carteira: cabeçalho + filtro de período */
+.evolucao-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.period-filter {
+    display: inline-flex;
+    gap: 4px;
+    background: var(--secondary-color);
+    padding: 4px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+}
+
+.period-btn {
+    padding: 6px 14px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.period-btn:hover {
+    color: var(--text-primary);
+}
+
+.period-btn.active {
+    color: white;
+    background-color: var(--primary-color);
+}

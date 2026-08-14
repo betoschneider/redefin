@@ -118,6 +118,13 @@ A área da carteira possui uma leve variação visual (fundo sutilmente azulado 
 - Barras horizontais coloridas pela cor do grupo, sem bordas.
 - Linha vertical no zero.
 
+#### Evolução da Carteira
+
+- **Histórico diário**: a cada consulta à API de portfólio é gravada uma linha por dia (tabela `investment_history`) com patrimônio total, yield (%) e data/hora. Se houver mais de uma consulta no mesmo dia, apenas a mais recente é mantida (upsert).
+- **Gráfico misto**: patrimônio em área (eixo esquerdo, R$) + yield em linha (eixo direito, %), com filtro de período **6M / 12M / 24M / Tudo** aplicado no client.
+- **Estado vazio**: enquanto não houver consultas, o gráfico exibe uma mensagem informativa.
+- O gráfico é renderizado abaixo das métricas e atualizado ao ativar a aba, no refresh de cotações e após aportes/importações.
+
 #### Gerenciamento de Carteira
 
 Página acessada pelo botão **Gerenciar Carteira** no subtítulo da área de investimento, com:
@@ -320,6 +327,11 @@ GOOGLE_CLIENT_ID=seu_client_id_aqui
 GOOGLE_CLIENT_SECRET=seu_client_secret_aqui
 QUOTE_CACHE_TTL=3600
 ACCOUNT_QUOTA=0
+# COOKIE_SECURE=auto | 1 | 0
+#   auto (padrão): cookie Secure apenas sobre HTTPS
+#   1: força Secure (use quando o app estiver atrás de proxy TLS sem --proxy-headers)
+#   0: nunca Secure (apenas desenvolvimento local)
+COOKIE_SECURE=auto
 ```
 
 Notas:
@@ -329,6 +341,7 @@ Notas:
 - `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` são usados no login Google OAuth (Authorization Code Flow).
   Obtenha ambos no [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
 - `QUOTE_CACHE_TTL` define o cache de cotações do `yfinance` em segundos.
+- `COOKIE_SECURE` controla o atributo `Secure` do cookie de sessão (ver comentário no `.env`). O cookie já é `HttpOnly` e `SameSite=Lax` por padrão.
 
 ---
 
@@ -454,7 +467,7 @@ uv run python -m compileall app
 - O comparativo % do **Saldo Total do Ano Projetado** é calculado em relação ao Saldo Total Efetivo do ano anterior, carregado em background após o carregamento principal.
 - O cache das cotações fica em memória; reiniciar o servidor limpa o cache.
 - A consulta ao Yahoo Finance depende de conectividade e disponibilidade externa.
-- Em caso de cache do navegador, os assets usam versão `?v=18`; incremente em `app/static/index.html` ao fazer deploy de mudanças estáticas.
+- Em caso de cache do navegador, os assets usam versão `?v=33`; incremente em `app/static/index.html` ao fazer deploy de mudanças estáticas.
 
 ---
 
@@ -462,38 +475,40 @@ uv run python -m compileall app
 
 ### Vulnerabilidades Críticas Corrigidas
 
-1. **Chave Secreta Padrão**: Removido o valor padrão `"change-me"` da `SECRET_KEY`. Agora, a aplicação exige que a `SECRET_KEY` seja configurada via variável de ambiente.
+1. **Login Google — `id_token` sem verificação de assinatura**: o token era apenas decodificado (base64) e checava-se somente o `aud`, o que permitia forjar um token com email arbitrário (account takeover). Agora o `id_token` é validado no Google (`oauth2.googleapis.com/tokeninfo`), conferindo **assinatura, `aud`, `iss` e `exp`** antes de autenticar.
 
-2. **Cookie de Sessão sem `HttpOnly`**: Corrigido para definir `httponly=True` em todos os cookies de sessão, prevenindo ataques XSS.
+2. **Login Google — `redirect_uri` derivado de input do usuário**: o `state` (origin) era usado diretamente para montar o `redirect_uri`, permitindo roubo do authorization code. Agora a origem é validada contra uma **allowlist fixa** (`REDIRECT_ORIGINS_PERMITIDOS`) antes de montar a URL.
 
-3. **CORS Permissivo**: Restringido `allow_origins` apenas aos domínios confiáveis, prevenindo ataques CSRF.
+3. **Cookie de Sessão sem `HttpOnly`**: o cookie `session_token` agora é `HttpOnly` + `SameSite=Lax` (+ `Secure` conforme `COOKIE_SECURE`), impedindo leitura via JS. O frontend não envia mais header `Authorization` — a autenticação é feita pelo cookie, e a verificação de sessão no carregamento usa o novo endpoint `GET /api/auth/status`.
 
-4. **Exposição de `totp_secret`**: Removido `totp_secret` da resposta de registro, evitando exposição de dados sensíveis.
+4. **Sessões sem expiração**: as sessões em memória agora têm **TTL de 2h com renovação deslizante** (cada requisição autenticada estende a sessão) e são podadas automaticamente.
+
+5. **Sem limite de taxa nos endpoints de autenticação**: implementado limitador em memória (janela deslizante) por IP em `register`, `login/step1`, `login/step2`, `reset-password` e `login/google` — impede força bruta e enumeração de contas.
+
+6. **CORS permissivo**: removida a origem `https://google.com` do `allow_origins`; apenas domínios confiáveis permanecem (com `allow_credentials=True`).
 
 ### Vulnerabilidades Importantes Corrigidas
 
-1. **Gerenciamento de Sessão em Memória**: Adicionado comentário indicando a necessidade de implementar um sistema robusto de gerenciamento de sessão com armazenamento persistente (Redis, PostgreSQL).
+1. **API key de IA exposta em texto puro**: a chave agora é **mascarada** em todas as respostas de perfil (`••••abcd`). O frontend só envia `api_key` quando o usuário digita uma chave nova; campo vazio remove a chave; campo mascarado mantém a existente.
 
-2. **Falta de Validação de `GOOGLE_CLIENT_ID`**: Implementada validação do `aud` (audience) no token Google para garantir que o token seja emitido para a aplicação correta.
+2. **Exclusão de conta incompleta**: `delete_account` agora também remove `investment_history` e `investment_metrics`, invalida a sessão e apaga o cookie.
 
-3. **Implicit Flow substituído por Authorization Code Flow**: O fluxo antigo (`response_type=id_token`) foi substituído pelo Authorization Code Flow com troca do código no servidor, eliminando a exposição do token no front-end.
+3. **Sem política de senha**: senhas agora exigem **mínimo de 8 caracteres** no registro, na redefinição e na troca de senha.
 
-3. **Falta de Limite de Taxa para Tentativas de Login**: Adicionado comentário indicando a necessidade de implementar um mecanismo de limite de taxa para evitar ataques de força bruta.
-
-4. **Falta de Validação de Entrada no Nível do Modelo**: Adicionados limites de comprimento para os campos `item`, `tipo` e `categoria` no modelo `Transacao`.
+4. **Mensagens de erro vazando detalhes internos**: erros do fluxo Google OAuth são logados no servidor e devolvidos com mensagem genérica ao client.
 
 ### Boas Práticas de Segurança
 
-- **Hash de Senha com `bcrypt`**: As funções `hash_password` e `verify_password` utilizam `bcrypt`, que é um algoritmo de hash de senha robusto e recomendado.
-- **Autenticação de Dois Fatores (2FA) com TOTP**: A implementação de TOTP com `pyotp` para registro, login de dois passos e redefinição de senha é uma boa adição de segurança.
-- **Validação de Entrada com Pydantic**: O uso de `BaseModel` do Pydantic para validar a entrada das requisições é uma boa prática.
-- **Quota de Contas**: A implementação de `ACCOUNT_QUOTA` ajuda a prevenir ataques de esgotamento de recursos.
+- **Hash de Senha com `bcrypt`**: as funções `hash_password` e `verify_password` utilizam `bcrypt`.
+- **Autenticação de Dois Fatores (2FA) com TOTP**: registro, login em dois passos e redefinição de senha usam `pyotp`.
+- **Validação de Entrada com Pydantic** em todos os endpoints.
+- **Quota de Contas** via `ACCOUNT_QUOTA` para evitar esgotamento de recursos.
+- **Escopo por usuário**: todas as consultas (incluindo o novo `investment_history`) são filtradas por `owner_id` (sem IDOR).
+- **Autorização em todas as rotas**: todo endpoint de dados depende de `verificar_autenticacao`.
 
-### Próximos Passos Recomendados
+### Nota sobre sessões e limite de taxa em memória
 
-1. **Implementar um sistema robusto de gerenciamento de sessão**: Utilizar armazenamento persistente (Redis, PostgreSQL) para sessões.
-2. **Implementar limites de taxa**: Utilizar bibliotecas como `slowapi` ou `fastapi-limiter` para evitar ataques de força bruta.
-3. **Revisar e testar**: Garantir que todas as alterações estejam funcionando corretamente.
+Ambos vivem em memória: sessões são perdidas no restart e o limite de taxa é por processo. Para múltiplas instâncias ou maior robustez, migrar para Redis (ex.: `slowapi`/`fastapi-limiter` + sessões em Redis/PostgreSQL).
 
 ---
 

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import verificar_autenticacao
 from app.config import QUOTE_CACHE_TTL, get_db
-from app.models import InvestmentAsset, InvestmentMetric, InvestmentTransaction
+from app.models import InvestmentAsset, InvestmentHistory, InvestmentMetric, InvestmentTransaction
 from app.transactions import get_user_by_username
 
 router = APIRouter(prefix="/api/investments", tags=["Investimentos"])
@@ -283,6 +283,29 @@ def _investment_payload(items, db=None, owner_id=None):
             if prev > 0 and portfolio_total > 0:
                 metric_delta_latest = round((portfolio_total / prev - 1) * 100, 2)
             last_query_date = metric.last_query_date.isoformat() if metric.last_query_date else None
+
+        # Histórico diário da carteira (gráfico de evolução): 1 linha por dia,
+        # atualizada a cada consulta — a consulta mais recente do dia vence.
+        if portfolio_total > 0:
+            hist = (
+                db.query(InvestmentHistory)
+                .filter(InvestmentHistory.owner_id == owner_id)
+                .order_by(InvestmentHistory.recorded_at.desc())
+                .first()
+            )
+            if hist is not None and hist.recorded_at.date() == agora.date():
+                hist.value = round(portfolio_total, 2)
+                hist.yield_pct = portfolio_yield
+                hist.recorded_at = agora
+            else:
+                db.add(
+                    InvestmentHistory(
+                        owner_id=owner_id,
+                        value=round(portfolio_total, 2),
+                        yield_pct=portfolio_yield,
+                        recorded_at=agora,
+                    )
+                )
         db.commit()
 
     return {
@@ -337,6 +360,35 @@ def get_investment_portfolio(
             _ensure_purchase_price(db, item)
 
     return _investment_payload(items, db, owner_id=owner_id)
+
+
+@router.get("/history")
+def get_investment_history(
+    db: Session = Depends(get_db),
+    username: str = Depends(verificar_autenticacao),
+):
+    """Histórico diário da carteira (1 ponto por dia), do mais antigo ao mais recente.
+
+    O volume é pequeno (1 linha/dia); o filtro de período (6/12/24 meses ou
+    tudo) é aplicado no client.
+    """
+    user = get_user_by_username(db, username)
+    if not user:
+        return []
+    registros = (
+        db.query(InvestmentHistory)
+        .filter(InvestmentHistory.owner_id == user.id)
+        .order_by(InvestmentHistory.recorded_at.asc())
+        .all()
+    )
+    return [
+        {
+            "value": r.value,
+            "yield": r.yield_pct,
+            "recorded_at": r.recorded_at.isoformat(),
+        }
+        for r in registros
+    ]
 
 
 @router.get("/yield-details")

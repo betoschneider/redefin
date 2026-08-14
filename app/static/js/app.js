@@ -382,14 +382,6 @@ function salvarFotoGoogle(url) {
     }
 }
 
-// Utilitários de Cookies
-function obterCookie(nome) {
-    const valor = `; ${document.cookie}`;
-    const partes = valor.split(`; ${nome}=`);
-    if (partes.length === 2) return partes.pop().split(';').shift();
-    return null;
-}
-
 // Alterna a tela de autenticação visível
 function showAuthScreen(screenId) {
     document.querySelectorAll(".auth-screen").forEach(screen => {
@@ -398,21 +390,31 @@ function showAuthScreen(screenId) {
     document.getElementById(screenId).classList.remove("hidden");
 }
 
-// Verifica se está logado
-function verificarAutenticacao() {
-    const token = obterCookie("session_token");
-    if (token) {
-        authModal.classList.remove("active");
-        carregarDadosDoAno();
-        atualizarVisibilidadeBotoes();
-        // Se já autenticado, tenta mostrar foto do Google
-        atualizarBotaoGoogle();
-    } else {
+// Verifica se está logado (cookie HttpOnly não é legível via JS: consulta o servidor)
+async function verificarAutenticacao() {
+    try {
+        const resp = await fetch("/api/auth/status");
+        const data = await resp.json();
+        const autenticado = data.authenticated === true;
+        if (autenticado) {
+            authModal.classList.remove("active");
+            carregarDadosDoAno();
+            atualizarVisibilidadeBotoes();
+            // Se já autenticado, tenta mostrar foto do Google
+            atualizarBotaoGoogle();
+        } else {
+            authModal.classList.add("active");
+            showAuthScreen("auth-login-step1");
+            document.getElementById("login-username").focus();
+            atualizarVisibilidadeBotoes();
+            atualizarBotaoGoogle();
+        }
+    } catch (e) {
+        console.error("Erro ao verificar autenticação:", e);
+        // Falha de rede: mostra a tela de login por segurança
         authModal.classList.add("active");
         showAuthScreen("auth-login-step1");
-        document.getElementById("login-username").focus();
         atualizarVisibilidadeBotoes();
-        atualizarBotaoGoogle();
     }
 }
 
@@ -510,6 +512,11 @@ async function realizarCadastro() {
         errorEl.classList.remove("hidden");
         return;
     }
+    if (password.length < 8) {
+        errorEl.textContent = "A senha deve ter no mínimo 8 caracteres.";
+        errorEl.classList.remove("hidden");
+        return;
+    }
 
     exibirLoading(true);
     try {
@@ -557,6 +564,11 @@ async function realizarRedefinicaoSenha() {
         errorEl.classList.remove("hidden");
         return;
     }
+    if (new_password.length < 8) {
+        errorEl.textContent = "A nova senha deve ter no mínimo 8 caracteres.";
+        errorEl.classList.remove("hidden");
+        return;
+    }
 
     exibirLoading(true);
     try {
@@ -593,16 +605,12 @@ async function realizarRedefinicaoSenha() {
 async function realizarLogout() {
     exibirLoading(true);
     try {
-        const token = obterCookie("session_token");
-        await fetch("/api/auth/logout", {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${token}` }
-        });
+        // O cookie HttpOnly é enviado automaticamente; o servidor o invalida
+        await fetch("/api/auth/logout", { method: "POST" });
     } catch (e) {
         console.error("Erro no logout:", e);
     } finally {
-        // Remove cookie manualmente por precaução
-        document.cookie = "session_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+        // Cookie HttpOnly não pode ser removido via JS; o servidor já o apagou
         authModal.classList.add("active");
         showAuthScreen("auth-login-step1");
         exibirLoading(false);
@@ -614,30 +622,27 @@ async function realizarLogout() {
 
 // Atualizar a visibilidade dos botões de navegação
 function atualizarVisibilidadeBotoes() {
-    const token = obterCookie("session_token");
-    
+    // Com cookie HttpOnly o JS não lê o token: usa o estado do modal como proxy
+    const autenticado = !authModal.classList.contains("active");
+
     // Botão Gerenciar Categorias no subtítulo do Controle Financeiro
     const btnRedirect = document.getElementById("btn-settings-redirect");
     if (btnRedirect) {
         // Só mostra se estiver logado (independente da aba ativa)
-        btnRedirect.classList.toggle("hidden", !token);
+        btnRedirect.classList.toggle("hidden", !autenticado);
     }
 
     // Botão Painel de Controle no header
     const btnProfile = document.getElementById("btn-profile");
     if (btnProfile) {
-        btnProfile.classList.toggle("hidden", !token);
+        btnProfile.classList.toggle("hidden", !autenticado);
     }
 
     // Botão Painel de Controle no subtítulo
     const btnPerfilRedirect = document.getElementById("btn-perfil-redirect");
     if (btnPerfilRedirect) {
-        btnPerfilRedirect.classList.toggle("hidden", !token);
+        btnPerfilRedirect.classList.toggle("hidden", !autenticado);
     }
-
-    // Botões de navegação entre abas foram removidos do header.
-    // A navegação para Configurações e Gerenciar Carteira é feita
-    // exclusivamente pelos botões nos subtítulos de cada área.
 }
 
 // Manter compatibilidade com chamadas existentes
@@ -647,14 +652,9 @@ function atualizarVisibilidadeBotaoConfig() {
 
 // Exportar CSV
 async function exportarCSV() {
-    const token = obterCookie("session_token");
-    if (!token) return;
-
     exibirLoading(true);
     try {
-        const response = await fetch("/api/transactions/download", {
-            headers: { "Authorization": `Bearer ${token}` }
-        });
+        const response = await fetch("/api/transactions/download");
 
         if (!response.ok) throw new Error("Erro na exportação.");
 
@@ -685,9 +685,6 @@ async function importarCSV(file) {
         return;
     }
 
-    const token = obterCookie("session_token");
-    if (!token) return;
-
     const formData = new FormData();
     formData.append("file", file);
 
@@ -695,7 +692,6 @@ async function importarCSV(file) {
     try {
         const response = await fetch("/api/transactions/upload", {
             method: "POST",
-            headers: { "Authorization": `Bearer ${token}` },
             body: formData
         });
 
@@ -749,17 +745,12 @@ function alternarTema() {
 
 // Atualiza dinamicamente o seletor de anos com base no banco de dados e regras
 async function atualizarSeletorAnos() {
-    const token = obterCookie("session_token");
-    if (!token) return;
-
     const anoAtual = new Date().getFullYear();
     const anoSeguinte = anoAtual + 1;
     let anos = [anoAtual, anoSeguinte];
 
     try {
-        const response = await fetch("/api/transactions/anos", {
-            headers: { "Authorization": `Bearer ${token}` }
-        });
+        const response = await fetch("/api/transactions/anos");
         if (response.ok) {
             const anosDb = await response.json();
             anosDb.forEach(ano => {
@@ -800,11 +791,8 @@ async function atualizarSeletorAnos() {
 async function carregarDadosDoAno() {
     exibirLoading(true);
     try {
-        const token = obterCookie("session_token");
         await atualizarSeletorAnos();
-        const response = await fetch(`/api/transactions?ano=${anoAtivo}`, {
-            headers: { "Authorization": `Bearer ${token}` }
-        });
+        const response = await fetch(`/api/transactions?ano=${anoAtivo}`);
 
         if (response.status === 401) {
             realizarLogout();
@@ -827,7 +815,7 @@ async function carregarDadosDoAno() {
         atualizarGraficos();
 
         // Carrega dados do ano anterior em background para o comparativo
-        carregarDadosAnoAnterior(token);
+        carregarDadosAnoAnterior();
 
     } catch (e) {
         console.error(e);
@@ -838,12 +826,10 @@ async function carregarDadosDoAno() {
 }
 
 // Busca dados do ano anterior para calcular comparativo % do Saldo Total
-async function carregarDadosAnoAnterior(token) {
+async function carregarDadosAnoAnterior() {
     try {
         const anoAnterior = anoAtivo - 1;
-        const resp = await fetch(`/api/transactions?ano=${anoAnterior}`, {
-            headers: { "Authorization": `Bearer ${token}` }
-        });
+        const resp = await fetch(`/api/transactions?ano=${anoAnterior}`);
         if (!resp.ok) {
             dadosPivotadosAnoAnterior = [];
             atualizarMetricas();
@@ -877,12 +863,8 @@ let dropdownTiposCache = [];
 let dropdownCategoriasCache = [];
 
 async function carregarDropdownData() {
-    const token = obterCookie("session_token");
-    if (!token) return;
     try {
-        const resp = await fetch("/api/transactions/dropdown-data", {
-            headers: { "Authorization": `Bearer ${token}` }
-        });
+        const resp = await fetch("/api/transactions/dropdown-data");
         if (resp.ok) {
             const data = await resp.json();
             dropdownTiposCache = data.tipos || [];
@@ -1567,12 +1549,10 @@ async function salvarDadosServidor() {
             }
         });
 
-        const token = obterCookie("session_token");
         const response = await fetch(`/api/transactions/bulk-save?ano=${anoAtivo}`, {
             method: "POST",
             headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`
+                "Content-Type": "application/json"
             },
             body: JSON.stringify(transacoesPlanas)
         });
@@ -2007,7 +1987,10 @@ function initInvestments() {
             if (e.target.files && e.target.files[0]) uploadInvestments(e.target.files[0]);
         });
     }
-    if (refreshButton) refreshButton.addEventListener("click", carregarInvestments);
+    if (refreshButton) refreshButton.addEventListener("click", () => {
+        carregarInvestments();
+        carregarEvolucao();
+    });
     if (downloadButton) downloadButton.addEventListener("click", downloadInvestments);
     if (contributionValue) contributionValue.addEventListener("input", renderInvestmentSuggestions);
     if (contributionAssets) contributionAssets.addEventListener("input", renderInvestmentSuggestions);
@@ -2021,6 +2004,7 @@ function initInvestments() {
     window.onInvestmentTabActivated = () => {
         if (!investmentPortfolio) {
             carregarInvestments().then(() => {
+                carregarEvolucao();
                 // Se não tem ativos, redireciona para gerenciamento na primeira vez
                 if (investmentPortfolio && (!investmentPortfolio.assets || investmentPortfolio.assets.length === 0)) {
                     const firstTime = localStorage.getItem('carteira_first_visit');
@@ -2031,6 +2015,8 @@ function initInvestments() {
                 }
             });
         } else {
+            // Mantém o gráfico de evolução atualizado (o upsert diário ocorre no /portfolio)
+            carregarEvolucao();
             // Verifica se está vazio e redireciona
             if (!investmentPortfolio.assets || investmentPortfolio.assets.length === 0) {
                 const firstTime = localStorage.getItem('carteira_first_visit');
@@ -2041,17 +2027,14 @@ function initInvestments() {
             }
         }
     };
+
+    configurarFiltrosEvolucao();
 }
 
 async function carregarInvestments() {
-    const token = obterCookie("session_token");
-    if (!token) return;
-
     exibirLoading(true);
     try {
-        const resp = await fetch("/api/investments/portfolio", {
-            headers: { "Authorization": `Bearer ${token}` }
-        });
+        const resp = await fetch("/api/investments/portfolio");
         if (resp.status === 401) {
             realizarLogout();
             return;
@@ -2316,13 +2299,11 @@ async function confirmInvestmentContribution() {
         return;
     }
 
-    const token = obterCookie("session_token");
     exibirLoading(true);
     try {
         const resp = await fetch("/api/investments/contribution", {
             method: "POST",
             headers: {
-                "Authorization": `Bearer ${token}`,
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({ purchases })
@@ -2332,6 +2313,7 @@ async function confirmInvestmentContribution() {
         alert(data.message || "Aporte confirmado.");
         document.getElementById("inv-confirm-check").checked = false;
         await carregarInvestments();
+        carregarEvolucao();
     } catch (e) {
         console.error(e);
         alert(e.message || "Não foi possível confirmar o aporte.");
@@ -2346,20 +2328,19 @@ async function uploadInvestments(file) {
         return;
     }
 
-    const token = obterCookie("session_token");
     const fd = new FormData();
     fd.append("file", file);
     exibirLoading(true);
     try {
         const resp = await fetch("/api/investments/upload", {
             method: "POST",
-            headers: { "Authorization": `Bearer ${token}` },
             body: fd
         });
         const data = await resp.json();
         if (!resp.ok) throw new Error(data.detail || "Falha na importação.");
         alert(data.message || "Carteira importada.");
         await carregarInvestments();
+        carregarEvolucao();
     } catch (e) {
         console.error(e);
         alert(e.message || "Não foi possível importar a carteira.");
@@ -2370,13 +2351,9 @@ async function uploadInvestments(file) {
 }
 
 async function downloadInvestments() {
-    const token = obterCookie("session_token");
-    if (!token) return;
     exibirLoading(true);
     try {
-        const response = await fetch("/api/investments/download", {
-            headers: { "Authorization": `Bearer ${token}` }
-        });
+        const response = await fetch("/api/investments/download");
         if (!response.ok) throw new Error("Falha na exportação.");
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -2453,6 +2430,181 @@ function colorForGroup(group) {
 }
 
 // ===================================================================
+// Evolução da Carteira (histórico diário: 1 ponto por dia)
+// ===================================================================
+
+let chartEvolucaoInstancia = null;
+let evolucaoData = [];
+let evolucaoPeriodo = "12";
+
+async function carregarEvolucao() {
+    try {
+        const resp = await fetch("/api/investments/history");
+        if (!resp.ok) return;
+        evolucaoData = await resp.json();
+        renderizarEvolucao();
+    } catch (e) {
+        console.error("Erro ao carregar evolução da carteira:", e);
+    }
+}
+
+function renderizarEvolucao() {
+    const canvas = document.getElementById("chart-evolucao");
+    if (!canvas || typeof Chart === "undefined") return;
+    const ctx = canvas.getContext("2d");
+
+    if (chartEvolucaoInstancia) {
+        chartEvolucaoInstancia.destroy();
+        chartEvolucaoInstancia = null;
+    }
+
+    let dados = evolucaoData || [];
+    if (evolucaoPeriodo !== "all") {
+        const meses = parseInt(evolucaoPeriodo, 10) || 0;
+        const limite = new Date();
+        limite.setMonth(limite.getMonth() - meses);
+        dados = dados.filter(d => new Date(d.recorded_at) >= limite);
+    }
+
+    const textColor = corTextoTema();
+    const gridColor = getComputedStyle(document.body).getPropertyValue("--border-color").trim() || "rgba(128, 128, 128, 0.15)";
+
+    // Estado vazio: o gráfico se preenche conforme as consultas à carteira
+    if (dados.length === 0) {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.max(1, Math.round(rect.width * dpr));
+        canvas.height = Math.max(1, Math.round(rect.height * dpr));
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, rect.width, rect.height);
+        ctx.font = "14px Outfit, sans-serif";
+        ctx.fillStyle = corTextoSecundarioTema();
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("Sem dados ainda — as consultas à carteira aparecerão aqui.", rect.width / 2, rect.height / 2);
+        return;
+    }
+
+    // Com 1-2 pontos não existe segmento de linha: exibe os pontos visíveis
+    const mostrarPontos = dados.length <= 2;
+
+    const labels = dados.map(d => {
+        const dt = new Date(d.recorded_at);
+        return dt.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+    });
+
+    chartEvolucaoInstancia = new Chart(ctx, {
+        type: "line",
+        data: {
+            labels,
+            datasets: [
+                {
+                    // Patrimônio em área (eixo esquerdo, R$): borda sólida, interior translúcido
+                    label: "Patrimônio",
+                    data: dados.map(d => d.value),
+                    yAxisID: "y",
+                    borderColor: "#2ecc71",
+                    backgroundColor: "rgba(46, 204, 113, 0.25)",
+                    fill: true,
+                    tension: 0.3,
+                    borderWidth: 2,
+                    pointRadius: mostrarPontos ? 4 : 0,
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: "#2ecc71",
+                    pointBorderColor: "#2ecc71",
+                    pointBorderWidth: 0
+                },
+                {
+                    // Yield em linha (eixo direito, %): cor sólida, desenhado por cima
+                    label: "Yield (%)",
+                    data: dados.map(d => (d.yield === null || d.yield === undefined ? null : d.yield)),
+                    yAxisID: "y1",
+                    borderColor: "#f39c12",
+                    backgroundColor: "#f39c12",
+                    fill: false,
+                    tension: 0.3,
+                    borderWidth: 2,
+                    pointRadius: mostrarPontos ? 4 : 0,
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: "#f39c12",
+                    pointBorderColor: "#f39c12",
+                    pointBorderWidth: 0
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: "top",
+                    labels: { color: textColor, font: { family: "Outfit", size: 12 } }
+                },
+                tooltip: {
+                    mode: "index",
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || "";
+                            if (label) label += ": ";
+                            const valor = context.parsed.y;
+                            if (valor === null) return label;
+                            if (context.dataset.yAxisID === "y1") {
+                                label += `${valor >= 0 ? "+" : ""}${formatNumber(valor, 2)}%`;
+                            } else {
+                                label += formatarMoeda(valor);
+                            }
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: gridColor },
+                    ticks: { color: textColor, font: { family: "Outfit" }, maxTicksLimit: 12 }
+                },
+                y: {
+                    position: "left",
+                    grid: { color: gridColor },
+                    ticks: {
+                        color: textColor,
+                        font: { family: "Outfit" },
+                        callback: function(value) {
+                            return "R$ " + Number(value).toLocaleString("pt-BR", { maximumFractionDigits: 0 });
+                        }
+                    }
+                },
+                y1: {
+                    position: "right",
+                    grid: { drawOnChartArea: false },
+                    ticks: {
+                        color: textColor,
+                        font: { family: "Outfit" },
+                        callback: function(value) {
+                            return `${value >= 0 ? "+" : ""}${value}%`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function configurarFiltrosEvolucao() {
+    const container = document.getElementById("evolucao-filtros");
+    if (!container) return;
+    container.querySelectorAll(".period-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            container.querySelectorAll(".period-btn").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            evolucaoPeriodo = btn.dataset.period;
+            renderizarEvolucao();
+        });
+    });
+}
+
+// ===================================================================
 // Gerenciamento de Carteira de Investimento (CRUD)
 // ===================================================================
 
@@ -2489,14 +2641,9 @@ function initCarteiraGerenciar() {
 }
 
 async function carregarCarteiraGerenciar() {
-    const token = obterCookie("session_token");
-    if (!token) return;
-
     exibirLoading(true);
     try {
-        const resp = await fetch("/api/investments", {
-            headers: { "Authorization": `Bearer ${token}` }
-        });
+        const resp = await fetch("/api/investments");
         if (resp.status === 401) {
             realizarLogout();
             return;
@@ -2521,13 +2668,8 @@ async function carregarCarteiraGerenciar() {
 }
 
 async function carregarYieldDetails() {
-    const token = obterCookie("session_token");
-    if (!token) return;
-
     try {
-        const resp = await fetch("/api/investments/yield-details", {
-            headers: { "Authorization": `Bearer ${token}` }
-        });
+        const resp = await fetch("/api/investments/yield-details");
         if (!resp.ok) return;
 
         const details = await resp.json();
@@ -2710,9 +2852,6 @@ function removerAtivoCarteira(idx) {
 }
 
 async function salvarCarteiraGerenciar() {
-    const token = obterCookie("session_token");
-    if (!token) return;
-
     // Valida: ticker obrigatório
     for (const asset of carteiraGerenciarAtivos) {
         if (!asset.ticker || !asset.ticker.trim()) {
@@ -2734,7 +2873,6 @@ async function salvarCarteiraGerenciar() {
 
         const resp = await fetch("/api/investments/upload", {
             method: "POST",
-            headers: { "Authorization": `Bearer ${token}` },
             body: fd
         });
         const data = await resp.json();
@@ -2743,7 +2881,7 @@ async function salvarCarteiraGerenciar() {
         alert("Carteira salva com sucesso!");
         await carregarCarteiraGerenciar();
         // Recarrega também a view da carteira
-        if (investmentPortfolio) carregarInvestments();
+        if (investmentPortfolio) { await carregarInvestments(); carregarEvolucao(); }
     } catch (e) {
         console.error(e);
         alert(e.message || "Não foi possível salvar a carteira.");
@@ -2758,9 +2896,6 @@ async function importarCarteiraCSV(file) {
         return;
     }
 
-    const token = obterCookie("session_token");
-    if (!token) return;
-
     const fd = new FormData();
     fd.append("file", file);
 
@@ -2768,14 +2903,13 @@ async function importarCarteiraCSV(file) {
     try {
         const resp = await fetch("/api/investments/upload", {
             method: "POST",
-            headers: { "Authorization": `Bearer ${token}` },
             body: fd
         });
         const data = await resp.json();
         if (!resp.ok) throw new Error(data.detail || "Falha na importação");
         alert(data.message || "Carteira importada com sucesso!");
         await carregarCarteiraGerenciar();
-        if (investmentPortfolio) carregarInvestments();
+        if (investmentPortfolio) { await carregarInvestments(); carregarEvolucao(); }
     } catch (e) {
         console.error(e);
         alert(e.message || "Não foi possível importar a carteira.");
@@ -2786,13 +2920,9 @@ async function importarCarteiraCSV(file) {
 }
 
 async function downloadCarteiraCSV() {
-    const token = obterCookie("session_token");
-    if (!token) return;
     exibirLoading(true);
     try {
-        const response = await fetch("/api/investments/download", {
-            headers: { "Authorization": `Bearer ${token}` }
-        });
+        const response = await fetch("/api/investments/download");
         if (!response.ok) throw new Error("Falha na exportação.");
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -2828,14 +2958,11 @@ function initSettings() {
 }
 
 async function carregarSettings() {
-    const token = obterCookie("session_token");
-    if (!token) return;
-
     try {
         // Carrega tipos e categorias em paralelo
         const [tiposResp, categoriasResp] = await Promise.all([
-            fetch("/api/settings/tipos", { headers: { "Authorization": `Bearer ${token}` } }),
-            fetch("/api/settings/categorias", { headers: { "Authorization": `Bearer ${token}` } })
+            fetch("/api/settings/tipos"),
+            fetch("/api/settings/categorias")
         ]);
 
         if (tiposResp.ok) settingsTipos = await tiposResp.json();
@@ -3091,13 +3218,11 @@ async function handleAddTipo() {
     const input = document.getElementById("settings-tipo-nome");
     const nome = input.value.trim();
     if (!nome) return alert("Informe o nome do tipo.");
-    const token = obterCookie("session_token");
-    if (!token) return;
 
     try {
         const resp = await fetch("/api/settings/tipos", {
             method: "POST",
-            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ nome })
         });
         const data = await resp.json();
@@ -3115,11 +3240,10 @@ async function handleAddTipo() {
 }
 
 async function atualizarTipo(id, nome) {
-    const token = obterCookie("session_token");
     try {
         const resp = await fetch(`/api/settings/tipos/${id}`, {
             method: "PUT",
-            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ nome })
         });
         const data = await resp.json();
@@ -3136,11 +3260,9 @@ async function atualizarTipo(id, nome) {
 }
 
 async function removerTipo(id) {
-    const token = obterCookie("session_token");
     try {
         const resp = await fetch(`/api/settings/tipos/${id}`, {
-            method: "DELETE",
-            headers: { "Authorization": `Bearer ${token}` }
+            method: "DELETE"
         });
         const data = await resp.json();
         if (!resp.ok) {
@@ -3165,12 +3287,11 @@ async function handleAddCategoria() {
 
     if (!nome) return alert("Informe o nome da categoria.");
     if (!tipo_id) return alert("Selecione um tipo.");
-    const token = obterCookie("session_token");
 
     try {
         const resp = await fetch("/api/settings/categorias", {
             method: "POST",
-            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ nome, valor, tipo_id })
         });
         const data = await resp.json();
@@ -3188,11 +3309,10 @@ async function handleAddCategoria() {
 }
 
 async function atualizarCategoria(id, nome, valor, tipo_id) {
-    const token = obterCookie("session_token");
     try {
         const resp = await fetch(`/api/settings/categorias/${id}`, {
             method: "PUT",
-            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ nome, valor, tipo_id })
         });
         const data = await resp.json();
@@ -3208,11 +3328,9 @@ async function atualizarCategoria(id, nome, valor, tipo_id) {
 }
 
 async function removerCategoria(id) {
-    const token = obterCookie("session_token");
     try {
         const resp = await fetch(`/api/settings/categorias/${id}`, {
-            method: "DELETE",
-            headers: { "Authorization": `Bearer ${token}` }
+            method: "DELETE"
         });
         const data = await resp.json();
         if (!resp.ok) {
@@ -3462,13 +3580,8 @@ atualizarGraficos = function() {
 // ===================================================================
 
 async function carregarInsightFinanceiro() {
-    const token = obterCookie("session_token");
-    if (!token) return;
-
     try {
-        const resp = await fetch(`/api/insights/financial?ano=${anoAtivo}`, {
-            headers: { "Authorization": `Bearer ${token}` }
-        });
+        const resp = await fetch(`/api/insights/financial?ano=${anoAtivo}`);
         if (resp.ok) {
             const data = await resp.json();
             exibirInsight('financial', data);
@@ -3479,13 +3592,8 @@ async function carregarInsightFinanceiro() {
 }
 
 async function carregarInsightInvestimento() {
-    const token = obterCookie("session_token");
-    if (!token) return;
-
     try {
-        const resp = await fetch("/api/insights/investment", {
-            headers: { "Authorization": `Bearer ${token}` }
-        });
+        const resp = await fetch("/api/insights/investment");
         if (resp.ok) {
             const data = await resp.json();
             exibirInsight('investment', data);
@@ -3496,9 +3604,6 @@ async function carregarInsightInvestimento() {
 }
 
 async function gerarInsightFinanceiro() {
-    const token = obterCookie("session_token");
-    if (!token) return;
-
     const btn = document.getElementById("btn-generate-financial-insight");
     const questionEl = document.getElementById("financial-insight-question");
     const question = questionEl ? questionEl.value.trim() : "";
@@ -3509,7 +3614,6 @@ async function gerarInsightFinanceiro() {
         const resp = await fetch(`/api/insights/financial/generate?ano=${anoAtivo}`, {
             method: "POST",
             headers: {
-                "Authorization": `Bearer ${token}`,
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({ question })
@@ -3534,9 +3638,6 @@ async function gerarInsightFinanceiro() {
 }
 
 async function gerarInsightInvestimento() {
-    const token = obterCookie("session_token");
-    if (!token) return;
-
     const btn = document.getElementById("btn-generate-investment-insight");
     const questionEl = document.getElementById("investment-insight-question");
     const question = questionEl ? questionEl.value.trim() : "";
@@ -3547,7 +3648,6 @@ async function gerarInsightInvestimento() {
         const resp = await fetch("/api/insights/investment/generate", {
             method: "POST",
             headers: {
-                "Authorization": `Bearer ${token}`,
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({ question })
@@ -3603,13 +3703,8 @@ function exibirInsight(tipo, data) {
 // ===================================================================
 
 async function carregarPerfil() {
-    const token = obterCookie("session_token");
-    if (!token) return;
-
     try {
-        const resp = await fetch("/api/profile", {
-            headers: { "Authorization": `Bearer ${token}` }
-        });
+        const resp = await fetch("/api/profile");
         if (resp.status === 401) { realizarLogout(); return; }
         if (!resp.ok) return;
 
@@ -3629,9 +3724,6 @@ async function carregarPerfil() {
 }
 
 async function salvarPerfil() {
-    const token = obterCookie("session_token");
-    if (!token) return;
-
     const name = document.getElementById("profile-name").value.trim();
     const email = document.getElementById("profile-email").value.trim();
     const msgEl = document.getElementById("profile-save-msg");
@@ -3640,7 +3732,6 @@ async function salvarPerfil() {
         const resp = await fetch("/api/profile", {
             method: "PUT",
             headers: {
-                "Authorization": `Bearer ${token}`,
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({ name, email })
@@ -3662,9 +3753,6 @@ async function salvarPerfil() {
 }
 
 async function salvarSenha() {
-    const token = obterCookie("session_token");
-    if (!token) return;
-
     const currentPassword = document.getElementById("profile-current-password").value;
     const newPassword = document.getElementById("profile-new-password").value;
     const msgEl = document.getElementById("password-save-msg");
@@ -3673,8 +3761,8 @@ async function salvarSenha() {
         alert("Preencha todos os campos de senha.");
         return;
     }
-    if (newPassword.length < 6) {
-        alert("A nova senha deve ter no mínimo 6 caracteres.");
+    if (newPassword.length < 8) {
+        alert("A nova senha deve ter no mínimo 8 caracteres.");
         return;
     }
 
@@ -3682,7 +3770,6 @@ async function salvarSenha() {
         const resp = await fetch("/api/profile/password", {
             method: "PUT",
             headers: {
-                "Authorization": `Bearer ${token}`,
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
@@ -3704,21 +3791,26 @@ async function salvarSenha() {
 }
 
 async function salvarConfigAI() {
-    const token = obterCookie("session_token");
-    if (!token) return;
-
     const provider = document.getElementById("profile-ai-provider").value;
-    const apiKey = document.getElementById("profile-api-key").value.trim();
+    const apiKeyField = document.getElementById("profile-api-key");
+    const apiKey = apiKeyField.value.trim();
     const msgEl = document.getElementById("ai-save-msg");
+
+    // O backend devolve a chave mascarada (ex.: ••••abcd). Se o campo ainda
+    // contém o valor mascarado, o usuário não digitou chave nova: omite
+    // api_key do payload para manter a chave atual.
+    const body = { ai_provider: provider };
+    if (!apiKey.includes("••••")) {
+        body.api_key = apiKey; // vazio remove a chave; preenchido atualiza
+    }
 
     try {
         const resp = await fetch("/api/profile/ai-config", {
             method: "PUT",
             headers: {
-                "Authorization": `Bearer ${token}`,
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({ ai_provider: provider, api_key: apiKey })
+            body: JSON.stringify(body)
         });
         if (resp.status === 401) { realizarLogout(); return; }
         if (!resp.ok) {
@@ -3742,14 +3834,10 @@ async function excluirConta() {
     if (!confirm(confirmMsg)) return;
     if (!confirm("Clique em OK mais uma vez para confirmar a exclusão definitiva da sua conta.")) return;
 
-    const token = obterCookie("session_token");
-    if (!token) return;
-
     exibirLoading(true);
     try {
         const resp = await fetch("/api/profile", {
-            method: "DELETE",
-            headers: { "Authorization": `Bearer ${token}` }
+            method: "DELETE"
         });
         if (!resp.ok) {
             const err = await resp.json();
@@ -3757,8 +3845,7 @@ async function excluirConta() {
             return;
         }
         alert("Conta excluída permanentemente.");
-        // Faz logout
-        document.cookie = "session_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+        // O servidor invalida a sessão e remove o cookie (HttpOnly)
         localStorage.clear();
         window.location.reload();
     } catch (e) {

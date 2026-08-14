@@ -1,17 +1,19 @@
 from typing import Optional
 
 import bcrypt
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.auth import verificar_autenticacao
+from app.auth import encerrar_sessao, verificar_autenticacao
 from app.config import get_db
 from app.models import (
     Categoria,
     FinancialInsight,
     InvestmentAsset,
+    InvestmentHistory,
     InvestmentInsight,
+    InvestmentMetric,
     InvestmentTransaction,
     Tipo,
     Transacao,
@@ -50,6 +52,13 @@ class UpdateAiConfigRequest(BaseModel):
     api_key: Optional[str] = None
 
 
+def _mask_api_key(api_key: Optional[str]) -> Optional[str]:
+    """Mascara a chave de API na resposta (nunca devolve a chave completa)."""
+    if not api_key:
+        return None
+    return ("••••" + api_key[-4:]) if len(api_key) > 4 else "••••"
+
+
 def _get_user(db: Session, username: str) -> User:
     user = get_user_by_username(db, username)
     if not user:
@@ -69,7 +78,7 @@ def get_profile(
         name=user.name,
         email=user.email,
         ai_provider=user.ai_provider,
-        api_key=user.api_key,
+        api_key=_mask_api_key(user.api_key),
     )
 
 
@@ -92,7 +101,7 @@ def update_profile(
         name=user.name,
         email=user.email,
         ai_provider=user.ai_provider,
-        api_key=user.api_key,
+        api_key=_mask_api_key(user.api_key),
     )
 
 
@@ -109,8 +118,8 @@ def update_password(
     if not bcrypt.checkpw(req.current_password.encode("utf-8"), user.password_hash.encode("utf-8")):
         raise HTTPException(status_code=400, detail="Senha atual incorreta.")
 
-    if len(req.new_password) < 6:
-        raise HTTPException(status_code=400, detail="A nova senha deve ter no mínimo 6 caracteres.")
+    if len(req.new_password) < 8:
+        raise HTTPException(status_code=400, detail="A nova senha deve ter no mínimo 8 caracteres.")
 
     user.password_hash = _hash_password(req.new_password)
     db.commit()
@@ -135,7 +144,9 @@ def update_ai_config(
 
     user = _get_user(db, username)
     user.ai_provider = provider
-    user.api_key = req.api_key.strip() if req.api_key else None
+    # api_key omitida (None) = mantém a chave atual; string vazia = remove
+    if req.api_key is not None:
+        user.api_key = req.api_key.strip() if req.api_key.strip() else None
     db.commit()
     db.refresh(user)
     return UserProfileResponse(
@@ -143,12 +154,14 @@ def update_ai_config(
         name=user.name,
         email=user.email,
         ai_provider=user.ai_provider,
-        api_key=user.api_key,
+        api_key=_mask_api_key(user.api_key),
     )
 
 
 @router.delete("")
 def delete_account(
+    response: Response,
+    session_token: Optional[str] = Cookie(None),
     db: Session = Depends(get_db),
     username: str = Depends(verificar_autenticacao),
 ):
@@ -160,10 +173,16 @@ def delete_account(
     db.query(InvestmentInsight).filter(InvestmentInsight.owner_id == user.id).delete()
     db.query(InvestmentTransaction).filter(InvestmentTransaction.owner_id == user.id).delete()
     db.query(InvestmentAsset).filter(InvestmentAsset.owner_id == user.id).delete()
+    db.query(InvestmentHistory).filter(InvestmentHistory.owner_id == user.id).delete()
+    db.query(InvestmentMetric).filter(InvestmentMetric.owner_id == user.id).delete()
     db.query(Transacao).filter(Transacao.owner_id == user.id).delete()
     db.query(Categoria).filter(Categoria.owner_id == user.id).delete()
     # Tipos são compartilhados entre usuários, não excluímos
     db.delete(user)
     db.commit()
+
+    # Invalida a sessão e remove o cookie (HttpOnly não é apagável via JS)
+    encerrar_sessao(session_token)
+    response.delete_cookie("session_token", path="/")
 
     return {"success": True, "message": "Conta excluída permanentemente."}

@@ -23,6 +23,22 @@ class InvestmentMetric(Base):
     current_date = Column(DateTime, nullable=True)
 
 
+class InvestmentHistory(Base):
+    """Histórico diário da carteira: 1 linha por dia por usuário.
+
+    Alimenta o gráfico de evolução da carteira. A cada consulta à API de
+    portfólio, a linha do dia é atualizada (upsert) — a consulta mais
+    recente do dia vence, conforme o requisito do produto.
+    """
+    __tablename__ = "investment_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    value = Column(Float, nullable=False)
+    yield_pct = Column(Float, nullable=True)
+    recorded_at = Column(DateTime, nullable=False)
+
+
 class Transacao(Base):
     __tablename__ = "transacoes"
 

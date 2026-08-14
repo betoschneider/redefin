@@ -740,6 +740,9 @@ function alternarTema() {
     }
     // Re-renderiza gráficos para aplicar as cores corretas do novo tema
     atualizarGraficos();
+    // Gráficos da carteira capturam as cores na renderização: precisa re-renderizar
+    renderizarEvolucao();
+    if (investmentPortfolio) renderDeviationChart(investmentPortfolio.assets || []);
 }
 
 

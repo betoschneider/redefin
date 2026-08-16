@@ -327,6 +327,10 @@ GOOGLE_CLIENT_ID=seu_client_id_aqui
 GOOGLE_CLIENT_SECRET=seu_client_secret_aqui
 QUOTE_CACHE_TTL=3600
 ACCOUNT_QUOTA=0
+# ALLOWED_ORIGINS=https://fin.btoplay.com,https://outro.dominio.com
+#   Origens adicionais permitidas (CORS + redirect_uri do OAuth Google).
+#   Os domínios padrão (betoschneider.com, financeiro.betoschneider.com,
+#   localhost:8520) já estão incluídos; separe extras por vírgula.
 # COOKIE_SECURE=auto | 1 | 0
 #   auto (padrão): cookie Secure apenas sobre HTTPS
 #   1: força Secure (use quando o app estiver atrás de proxy TLS sem --proxy-headers)
@@ -342,6 +346,7 @@ Notas:
   Obtenha ambos no [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
 - `QUOTE_CACHE_TTL` define o cache de cotações do `yfinance` em segundos.
 - `COOKIE_SECURE` controla o atributo `Secure` do cookie de sessão (ver comentário no `.env`). O cookie já é `HttpOnly` e `SameSite=Lax` por padrão.
+- `ALLOWED_ORIGINS` permite adicionar domínios extras ao CORS e à allowlist do `redirect_uri` do OAuth Google sem alterar código. Lembre de também cadastrar o `redirect_uri` (`https://seu.dominio/google_oauth_callback.html`) no [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
 
 ---
 

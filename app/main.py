@@ -81,11 +81,22 @@ def _definir_cookie_sessao(request: Request, response: Response, session_token: 
 
 # Origens permitidas para o redirect_uri do OAuth Google. Nunca derivar o
 # redirect_uri de input do usuário (evita roubo do authorization code).
-REDIRECT_ORIGINS_PERMITIDOS = {
+# O default cobre os domínios conhecidos; adicione mais via ALLOWED_ORIGINS
+# (lista separada por vírgula), ex.: ALLOWED_ORIGINS=https://fin.btoplay.com
+_ORIGENS_PADRAO = {
     "https://betoschneider.com",
     "https://financeiro.betoschneider.com",
     "http://localhost:8520",
 }
+
+
+def _origens_permitidas() -> set[str]:
+    origens = set(_ORIGENS_PADRAO)
+    for item in os.getenv("ALLOWED_ORIGINS", "").split(","):
+        item = item.strip().rstrip("/")
+        if item:
+            origens.add(item)
+    return origens
 
 
 def _stamp_se_necessario(cfg: Config) -> None:
@@ -214,11 +225,7 @@ app = FastAPI(title="Controle Financeiro")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://betoschneider.com",
-        "https://financeiro.betoschneider.com",
-        "http://localhost:8520",
-    ],
+    allow_origins=sorted(_origens_permitidas()),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -423,7 +430,7 @@ def login_google(
     # O redirect_uri nunca deve ser derivado de input arbitrário: valida a
     # origem informada (state) contra uma allowlist fixa antes de montar a URL.
     origin = payload.state.rstrip("/") if payload.state else ""
-    if origin not in REDIRECT_ORIGINS_PERMITIDOS:
+    if origin not in _origens_permitidas():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Origem de redirecionamento inválida.",

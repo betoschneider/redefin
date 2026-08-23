@@ -169,6 +169,19 @@ def _call_deepseek(prompt: str, api_key: str) -> str:
         return f"Erro ao chamar DeepSeek: {str(e)}"
 
 
+def _media_sem_extremos(valores):
+    """Media anual descartando apenas o menor e o maior valor (divide por 10)."""
+    ordenados = sorted(valores)
+    return sum(ordenados[1:-1]) / 10.0
+
+
+def _mediana(valores):
+    """Mediana dos 12 valores mensais: media dos 2 valores centrais."""
+    ordenados = sorted(valores)
+    meio = len(ordenados) // 2
+    return (ordenados[meio - 1] + ordenados[meio]) / 2.0
+
+
 def _build_financial_prompt(db: Session, user: User, ano: Optional[int] = None, question: Optional[str] = None) -> str:
     """Monta o prompt de analise financeira com os dados do usuario.
 
@@ -258,6 +271,29 @@ def _build_financial_prompt(db: Session, user: User, ano: Optional[int] = None, 
                 f"| {indicador:10s} | {mes:02d}/{ano} | Receita=R${m['receita']:>10.2f} | Despesa=R${m['despesa']:>10.2f} | Investimento=R${m['investimento']:>10.2f} | Reserva=R${m['reserva']:>10.2f} | Saldo=R${saldo:>10.2f} |"
             )
 
+    # Medias anuais por tipo (mesma matematica do grafico Evolucao Mensal):
+    # media comum (soma dos 12 meses / 12), sem minimos/maximos (/10) e mediana.
+    TIPOS_MEDIA = ["receita", "despesa", "investimento", "reserva"]
+    linhas_medias = []
+    for tipo in TIPOS_MEDIA:
+        valores = [meses_agregados.get(mes, {}).get(tipo, 0.0) for mes in range(1, 13)]
+        if not any(valores):
+            continue  # tipo sem movimentacao no ano: omite da tabela
+        media = sum(valores) / 12.0
+        linhas_medias.append(
+            f"| {tipo.capitalize():12s} | R${media:>10.2f} | R${_media_sem_extremos(valores):>10.2f} | R${_mediana(valores):>10.2f} |"
+        )
+
+    texto_medias = ""
+    if linhas_medias:
+        texto_medias = (
+            "\nMedias Anuais por Tipo (12 meses):\n"
+            "| Tipo         | Media (12 meses) | Sem min/max      | Mediana          |\n"
+            "|--------------|------------------|------------------|------------------|\n"
+            + "\n".join(linhas_medias)
+            + "\n"
+        )
+
     categorias_cadastradas = db.query(Categoria).filter(Categoria.owner_id == user.id).all()
     mapa_metas = {c.nome.lower(): c.valor for c in categorias_cadastradas}
 
@@ -321,6 +357,7 @@ def _build_financial_prompt(db: Session, user: User, ano: Optional[int] = None, 
         "| Indicador   | Mes      | Receita         | Despesa         | Investimento     | Reserva          | Saldo            |\n"
         "|-------------|----------|-----------------|-----------------|------------------|------------------|------------------|\n"
         + "\n".join(resumo_meses)
+        + texto_medias
         + f"\n\n"
         f"Top 3 Fontes de Receita:\n{texto_receitas}\n\n"
         f"Top 5 Categorias de Despesa:\n{texto_despesas}\n\n"
@@ -340,6 +377,7 @@ def _build_financial_prompt(db: Session, user: User, ano: Optional[int] = None, 
         "Use valores CONCRETOS dos dados fornecidos (nao invente valores).\n\n"
         "2. Tendencias e Riscos: Identifique tendencias reais nos dados. "
         "Ha crescimento de despesas? Alguma categoria consome percentual excessivo? "
+        "Use as Medias Anuais por Tipo (comum, sem minimos/maximos e mediana) para detectar meses atipicos. "
         "Destaque valores EXATOS das categorias problematicas.\n\n"
         "3. Analise de Metas: Compare os gastos reais com as metas configuradas. "
         "Aponte quais categorias estao dentro ou fora da meta, usando os percentuais fornecidos.\n\n"

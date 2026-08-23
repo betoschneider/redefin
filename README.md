@@ -45,6 +45,7 @@ O delta % do **Saldo Total do Ano Projetado** é calculado em relação ao **Sal
 
 - Posicionado **acima das métricas**, logo após os controles de navegação.
 - Exibe receitas, despesas, investimentos e reservas mês a mês para o ano selecionado.
+- Linha de média por tipo com seletor de cálculo: **Média (12 meses)** (somatório ÷ 12), **Sem min/máx** (descarta o menor e o maior valor do ano e divide por 10 — **padrão**) ou **Mediana** (média dos dois valores centrais dos 12 meses).
 
 #### Filtros e Controles
 
@@ -472,7 +473,7 @@ uv run python -m compileall app
 - O comparativo % do **Saldo Total do Ano Projetado** é calculado em relação ao Saldo Total Efetivo do ano anterior, carregado em background após o carregamento principal.
 - O cache das cotações fica em memória; reiniciar o servidor limpa o cache.
 - A consulta ao Yahoo Finance depende de conectividade e disponibilidade externa.
-- Em caso de cache do navegador, os assets usam versão `?v=34`; incremente em `app/static/index.html` ao fazer deploy de mudanças estáticas.
+- Em caso de cache do navegador, os assets usam versão `?v=36`; incremente em `app/static/index.html` ao fazer deploy de mudanças estáticas.
 
 ---
 

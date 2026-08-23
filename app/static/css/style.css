@@ -1566,3 +1566,12 @@ body.light-theme.investment-mode .app-header {
     color: white;
     background-color: var(--primary-color);
 }
+
+/* Seletor de média do gráfico Evolução Mensal */
+.chart-media-select {
+    margin-left: auto;
+    padding: 4px 8px;
+    font-size: 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}

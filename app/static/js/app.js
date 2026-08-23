@@ -105,6 +105,15 @@ function configurarEventListeners() {
         atualizarGraficos();
     });
 
+    // Cálculo da média por tipo no gráfico de Evolução Mensal
+    const selectMediaMensal = document.getElementById("select-media-mensal");
+    if (selectMediaMensal) {
+        selectMediaMensal.addEventListener("change", (e) => {
+            tipoMediaMensal = e.target.value;
+            atualizarGraficos();
+        });
+    }
+
     // Filtros Locais da Tabela (Tipo e Categoria)
     if (filterTipo) {
         filterTipo.addEventListener("change", (e) => {
@@ -1626,6 +1635,15 @@ let chartMensalInstancia = null;
 let chartRoscaInstancia = null;
 let chartBarrasHInstancia = null;
 
+// Metodo de calculo da linha de media por tipo no grafico de Evolucao Mensal
+let tipoMediaMensal = "sem_minmax"; // "media" | "sem_minmax" | "mediana"
+
+const MEDIA_LABELS = {
+    media: "Média Anual",
+    sem_minmax: "Média (sem min/máx)",
+    mediana: "Mediana",
+};
+
 const CORES_RGB = {
     "Receita": [46, 204, 113],
     "Despesa": [231, 76, 60],
@@ -1669,6 +1687,25 @@ function obterCorTipoRGB(tipoStr, index = 0) {
     return CORES_EXTRAS_RGB[index % CORES_EXTRAS_RGB.length];
 }
 
+// Calcula a média mensal de um tipo conforme o método selecionado.
+// valores: os 12 valores mensais (efetivado + previsto de cada mês).
+function calcularMediaTipo(valores, metodo) {
+    const total = valores.reduce((a, b) => a + b, 0);
+    if (metodo === "sem_minmax") {
+        // Descarta apenas o menor e o maior valor do ano e divide por 10
+        const ordenados = [...valores].sort((a, b) => a - b);
+        return ordenados.slice(1, -1).reduce((a, b) => a + b, 0) / 10.0;
+    }
+    if (metodo === "mediana") {
+        // 12 meses ordenados: mediana = média dos 2 valores centrais
+        const ordenados = [...valores].sort((a, b) => a - b);
+        const meio = Math.floor(ordenados.length / 2);
+        return (ordenados[meio - 1] + ordenados[meio]) / 2.0;
+    }
+    // Média comum: somatório dos 12 meses dividido por 12
+    return total / 12.0;
+}
+
 function atualizarGraficoMensal(transacoes, anoSelecionado) {
     const canvas = document.getElementById('chart-mensal');
     if (!canvas) return;
@@ -1708,9 +1745,13 @@ function atualizarGraficoMensal(transacoes, anoSelecionado) {
 
     const mediasAnuais = {};
     Object.keys(dadosPorTipo).forEach(tipo => {
-        const totalEfetivado = dadosPorTipo[tipo].efetivado.reduce((a, b) => a + b, 0);
-        const totalPrevisto = dadosPorTipo[tipo].previsto.reduce((a, b) => a + b, 0);
-        mediasAnuais[tipo] = (totalEfetivado + totalPrevisto) / 12.0;
+        const valoresMensais = [];
+        for (let m = 0; m < 12; m += 1) {
+            valoresMensais.push(
+                (dadosPorTipo[tipo].efetivado[m] || 0) + (dadosPorTipo[tipo].previsto[m] || 0)
+            );
+        }
+        mediasAnuais[tipo] = calcularMediaTipo(valoresMensais, tipoMediaMensal);
     });
 
     const datasets = [];
@@ -1748,7 +1789,7 @@ function atualizarGraficoMensal(transacoes, anoSelecionado) {
 
         datasets.push({
             type: 'line',
-            label: `Média Anual ${tipo}`,
+            label: `${MEDIA_LABELS[tipoMediaMensal] || "Média Anual"} ${tipo}`,
             data: Array(12).fill(mediasAnuais[tipo]),
             borderColor: corEfetivado,
             borderWidth: 2,

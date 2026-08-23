@@ -19,7 +19,7 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Versão dos assets para cache-busting: incremente manualmente ao deploy (ex: v1 -> v2) -->
-    <link rel="stylesheet" href="css/style.css?v=35">
+    <link rel="stylesheet" href="css/style.css?v=36">
 </head>
 
 <body>
@@ -227,7 +227,15 @@
         <!-- Gráfico Evolução Mensal (acima das métricas) -->
         <section class="charts-section-inline financial-only">
             <div class="chart-card glass main-chart-card">
-                <h3><i class="fa-solid fa-chart-column"></i> Evolução Mensal de Lançamentos</h3>
+                <h3><i class="fa-solid fa-chart-column"></i> Evolução Mensal de Lançamentos
+                    <select id="select-media-mensal" class="custom-select chart-media-select"
+                        aria-label="Cálculo da média por tipo"
+                        title="Cálculo da linha de média por tipo">
+                        <option value="media">Média (12 meses)</option>
+                        <option value="sem_minmax" selected>Sem min/máx</option>
+                        <option value="mediana">Mediana</option>
+                    </select>
+                </h3>
                 <div class="chart-container">
                     <canvas id="chart-mensal"></canvas>
                 </div>
@@ -847,7 +855,7 @@
     </div>
 
     <!-- Scripts da Aplicação -->
-    <script src="js/app.js?v=35"></script>
+    <script src="js/app.js?v=36"></script>
 </body>
 
 </html>

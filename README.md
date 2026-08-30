@@ -497,7 +497,7 @@ uv run python -m compileall app
 - O comparativo % do **Saldo Total do Ano Projetado** é calculado em relação ao Saldo Total Efetivo do ano anterior, carregado em background após o carregamento principal.
 - O cache das cotações fica em memória; reiniciar o servidor limpa o cache.
 - A consulta ao Yahoo Finance depende de conectividade e disponibilidade externa.
-- Em caso de cache do navegador, os assets usam versão `?v=36`; incremente em `app/static/index.html` ao fazer deploy de mudanças estáticas.
+- Em caso de cache do navegador, os assets usam versão `?v=37`; incremente em `app/static/index.html` ao fazer deploy de mudanças estáticas.
 
 ---
 

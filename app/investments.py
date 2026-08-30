@@ -1,4 +1,5 @@
 import csv
+import math
 import time
 from datetime import datetime
 from io import StringIO
@@ -13,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.auth import verificar_autenticacao
 from app.config import QUOTE_CACHE_TTL, get_db
 from app.models import InvestmentAsset, InvestmentHistory, InvestmentMetric, InvestmentTransaction
-from app.transactions import get_user_by_username
+from app.transactions import get_user_by_username, neutralizar_celula_csv
 
 router = APIRouter(prefix="/api/investments", tags=["Investimentos"])
 
@@ -192,18 +193,25 @@ def _parse_float(value, default=0.0):
     if value in (None, ""):
         return default
     try:
-        return float(str(value).strip().replace("%", "").replace(",", "."))
+        parsed = float(str(value).strip().replace("%", "").replace(",", "."))
     except ValueError:
         return default
+    # NaN/Infinito corromperiam as métricas: trata como inválido (ISSUE 6)
+    if not math.isfinite(parsed):
+        return default
+    return parsed
 
 
 def _parse_int(value, default=0):
     if value in (None, ""):
         return default
     try:
-        return int(float(str(value).strip().replace(",", ".")))
+        parsed = float(str(value).strip().replace(",", "."))
     except ValueError:
         return default
+    if not math.isfinite(parsed):
+        return default
+    return int(parsed)
 
 
 def _investment_payload(items, db=None, owner_id=None):
@@ -500,13 +508,13 @@ def download_investments(
     writer.writeheader()
     for item in items:
         writer.writerow({
-            "Empresa": item.company,
-            "Ativo": item.ticker,
+            "Empresa": neutralizar_celula_csv(item.company),
+            "Ativo": neutralizar_celula_csv(item.ticker),
             "Quantidade": item.quantity,
             "PrecoCompra": item.purchase_price if item.purchase_price is not None else "",
             "Meta": item.target if item.target is not None else "",
-            "Ramo": item.sector or "",
-            "Grupo": item.group or "",
+            "Ramo": neutralizar_celula_csv(item.sector or ""),
+            "Grupo": neutralizar_celula_csv(item.group or ""),
         })
     output = si.getvalue()
     return StreamingResponse(

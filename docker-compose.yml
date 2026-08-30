@@ -4,10 +4,16 @@ services:
     container_name: controle_financeiro_app
     ports:
       - "8520:8520"
+    # .env é opcional: sem ele o app sobe com os padrões (Google OAuth oculto,
+    # SQLite em ./data). Requer docker compose 2.24+.
     env_file:
-      - .env
+      - path: .env
+        required: false
     volumes:
       - ./data:/app/data
     environment:
       - DATABASE_URL=sqlite:///./data/controle_financeiro.db
+      # COOKIE_SECURE vem do .env (env_file). Atrás de proxy TLS que termina o
+      # HTTPS (sem --proxy-headers), defina COOKIE_SECURE=1 no .env — o cookie
+      # de sessão só é enviado sobre HTTPS (ver README -> Variáveis de Ambiente).
     restart: unless-stopped

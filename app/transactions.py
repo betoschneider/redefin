@@ -1,3 +1,4 @@
+import math
 from datetime import datetime
 from typing import List, Optional
 
@@ -6,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.auth import verificar_autenticacao
+from app.auth import eh_admin, verificar_autenticacao
 from app.config import get_db
 from app.models import Categoria, Tipo, Transacao, User
 
@@ -63,6 +64,19 @@ class CategoriaResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+def neutralizar_celula_csv(valor) -> str:
+    """Previne CSV injection (ISSUE 3): prefixa com ' células que começam com
+    =, +, - ou @ para o Excel/LibreOffice não interpretá-las como fórmula.
+
+    Aplicar apenas em células de texto (item, tipo, categoria, nome, etc.);
+    campos numéricos são gravados como float e nunca originam fórmula.
+    """
+    texto = str(valor)
+    if texto.startswith(("=", "+", "-", "@")):
+        return "'" + texto
+    return texto
 
 
 def seed_default_tipos(db: Session) -> None:
@@ -224,7 +238,7 @@ def download_csv(
     tipos = db.query(Tipo).order_by(Tipo.id).all()
     mapa_tipos = {t.id: t.nome for t in tipos}
     for tp in tipos:
-        writer.writerow([tp.nome, "True" if tp.is_protegido else "False"])
+        writer.writerow([neutralizar_celula_csv(tp.nome), "True" if tp.is_protegido else "False"])
     stream.write("\n")
 
     # Seção: Categorias do usuário (com nome do tipo em vez do id)
@@ -238,8 +252,8 @@ def download_csv(
     for cat in categorias:
         tipo_nome = mapa_tipos.get(cat.tipo_id, "")
         writer.writerow([
-            tipo_nome,
-            cat.nome,
+            neutralizar_celula_csv(tipo_nome),
+            neutralizar_celula_csv(cat.nome),
             f"{cat.valor:.2f}",
             "True" if cat.is_protegido else "False",
         ])
@@ -260,7 +274,14 @@ def download_csv(
     for tx in transacoes:
         data_str = f"01/{tx.mes:02d}/{tx.ano}"
         pago_str = "True" if tx.pago else "False"
-        writer.writerow([data_str, tx.item, tx.tipo, tx.categoria, tx.valor, pago_str])
+        writer.writerow([
+            data_str,
+            neutralizar_celula_csv(tx.item),
+            neutralizar_celula_csv(tx.tipo),
+            neutralizar_celula_csv(tx.categoria),
+            tx.valor,
+            pago_str,
+        ])
 
     response = StreamingResponse(iter([stream.getvalue()]), media_type="text/csv")
     response.headers["Content-Disposition"] = "attachment; filename=dados_financeiros.csv"
@@ -367,6 +388,11 @@ def upload_csv(
             valor = float(row[2].strip())
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Valor inválido na categoria '{cat_nome}': {row[2]}")
+        if not math.isfinite(valor):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Valor inválido na categoria '{cat_nome}': {row[2]} (não pode ser NaN/Infinito).",
+            )
 
         tipo_obj = tipos_existentes.get(tipo_nome.lower())
         if not tipo_obj:
@@ -421,6 +447,11 @@ def upload_csv(
                 valor = float(row[4].strip())
             except ValueError:
                 raise HTTPException(status_code=400, detail=f"Valor inválido na linha {idx}: {row[4]}")
+            if not math.isfinite(valor):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Valor inválido na linha {idx}: {row[4]} (não pode ser NaN/Infinito).",
+                )
 
             pago_str = row[5].strip().lower()
             pago = pago_str in ["true", "1", "t", "yes", "y", "pago", "efetivado"]
@@ -614,6 +645,25 @@ def get_dropdown_data(
 
 
 # --- Tipos Endpoints ---
+#
+# Decisão de modelo (ISSUE 2): `tipos` é uma taxonomia compartilhada — as
+# categorias já são por usuário (owner_id), mas os tipos são globais. Como as
+# transações guardam o nome do tipo como string, renomear/excluir um tipo
+# afeta todos os usuários. Por isso a criação/edição/remoção é restrita a
+# administradores (ADMIN_USERNAMES) e a remoção valida transações de TODOS os
+# usuários. Leitura (listar/dropdown) permanece aberta a qualquer autenticado.
+
+
+def _exigir_admin(username: str) -> None:
+    if not eh_admin(username):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Apenas administradores podem gerenciar tipos. "
+                "Configure ADMIN_USERNAMES no .env."
+            ),
+        )
+
 
 @settings_router.get("/tipos", response_model=List[TipoResponse])
 def listar_tipos(
@@ -631,6 +681,8 @@ def criar_tipo(
     db: Session = Depends(get_db),
     username: str = Depends(verificar_autenticacao),
 ):
+    _exigir_admin(username)
+
     nome_stripped = tipo_in.nome.strip()
     if not nome_stripped:
         raise HTTPException(status_code=400, detail="Nome do tipo não pode estar vazio.")
@@ -653,6 +705,8 @@ def atualizar_tipo(
     db: Session = Depends(get_db),
     username: str = Depends(verificar_autenticacao),
 ):
+    _exigir_admin(username)
+
     tipo = db.query(Tipo).filter(Tipo.id == tipo_id).first()
     if not tipo:
         raise HTTPException(status_code=404, detail="Tipo não encontrado.")
@@ -667,7 +721,13 @@ def atualizar_tipo(
     if conflito:
         raise HTTPException(status_code=400, detail=f"Tipo '{nome_stripped}' já existe.")
 
+    nome_anterior = tipo.nome
     tipo.nome = nome_stripped
+    # Transações guardam o nome do tipo como string: propaga o rename para
+    # todos os usuários, mantendo o vínculo intacto (ISSUE 2).
+    db.query(Transacao).filter(Transacao.tipo == nome_anterior).update(
+        {Transacao.tipo: nome_stripped}, synchronize_session=False
+    )
     db.commit()
     db.refresh(tipo)
     return tipo
@@ -679,6 +739,8 @@ def remover_tipo(
     db: Session = Depends(get_db),
     username: str = Depends(verificar_autenticacao),
 ):
+    _exigir_admin(username)
+
     tipo = db.query(Tipo).filter(Tipo.id == tipo_id).first()
     if not tipo:
         raise HTTPException(status_code=404, detail="Tipo não encontrado.")
@@ -693,18 +755,15 @@ def remover_tipo(
             detail=f"Não é possível remover o tipo '{tipo.nome}' pois existem {categorias_count} categorias vinculadas a ele.",
         )
 
-    # Verificar se há transações usando este tipo
-    user = get_user_by_username(db, username)
-    if user:
-        transacoes_count = db.query(Transacao).filter(
-            Transacao.owner_id == user.id,
-            Transacao.tipo == tipo.nome,
-        ).count()
-        if transacoes_count > 0:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Não é possível remover o tipo '{tipo.nome}' pois existem {transacoes_count} lançamentos usando este tipo.",
-            )
+    # Verificar se há transações usando este tipo — de TODOS os usuários
+    # (o tipo é compartilhado; checar só o chamador permitiria apagar um tipo
+    # em uso por outro usuário).
+    transacoes_count = db.query(Transacao).filter(Transacao.tipo == tipo.nome).count()
+    if transacoes_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Não é possível remover o tipo '{tipo.nome}' pois existem {transacoes_count} lançamentos usando este tipo.",
+        )
 
     db.delete(tipo)
     db.commit()

@@ -1,5 +1,6 @@
 import logging
 import os
+import secrets
 import time
 from collections import defaultdict, deque
 from pathlib import Path
@@ -8,7 +9,6 @@ from typing import Optional
 import bcrypt
 import pyotp
 import requests
-from alembic import command
 from alembic.config import Config
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,12 +16,19 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from alembic import command
 from app import insights, investments, models, profile, transactions
-from app.auth import criar_sessao, encerrar_sessao, verificar_autenticacao
-from app.config import Base, engine, get_db, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+from app.auth import criar_sessao, eh_admin, encerrar_sessao, verificar_autenticacao
+from app.config import (
+    GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET,
+    GOOGLE_OAUTH_ENABLED,
+    Base,
+    engine,
+    get_db,
+)
 from app.models import User
 from app.transactions import get_user_by_username
-
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +59,28 @@ def _verificar_limite_taxa(chave: str, max_attempts: int, janela_segundos: int) 
     # Poda ocasional para evitar crescimento infinito do dict
     if len(_limite_taxa_por_chave) > _LIMITE_MAX_CHAVES:
         _limite_taxa_por_chave.clear()
+
+
+# --- OAuth state (nonce anti login-CSRF) ---------------------------------
+# O `state` do Google OAuth é um nonce aleatório emitido pelo servidor e
+# vinculado à origin permitida (ISSUE 5). Uso único + TTL curto; em memória,
+# como as sessões (migrar com elas para Redis se houver múltiplas instâncias).
+OAUTH_STATE_TTL_SECONDS = 600  # 10 min
+OAUTH_STATES = {}  # state -> (origin, expires_at)
+
+
+def _podar_oauth_states() -> None:
+    agora = time.time()
+    expirados = [s for s, (_, exp) in OAUTH_STATES.items() if exp <= agora]
+    for s in expirados:
+        OAUTH_STATES.pop(s, None)
+
+
+def _google_oauth_ativo() -> bool:
+    """Login Google disponível: habilitado via GOOGLE_OAUTH_ENABLED e com as
+    credenciais configuradas. O frontend usa o mesmo valor para esconder o
+    botão de login quando o OAuth estiver desligado ou sem configuração."""
+    return GOOGLE_OAUTH_ENABLED and bool(GOOGLE_CLIENT_ID) and bool(GOOGLE_CLIENT_SECRET)
 
 
 # --- Cookie de sessão ----------------------------------------------------
@@ -232,6 +261,33 @@ app.add_middleware(
 )
 
 
+# --- Headers de segurança (ISSUE 4) ---------------------------------------
+# Aplicados em todas as respostas (inclusive arquivos estáticos).
+# CSP: 'unsafe-inline' apenas em style (o HTML usa muitos atributos style=);
+# scripts são só 'self' + Chart.js do CDN (google_oauth_callback.js é local).
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' https://cdn.jsdelivr.net; "
+    "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
+    "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
+    "img-src 'self' data: https:; "
+    "connect-src 'self'; "
+    "frame-ancestors 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'"
+)
+
+
+@app.middleware("http")
+async def _headers_seguranca(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = _CSP
+    return response
+
+
 class UserCreate(BaseModel):
     username: str
     password: str
@@ -296,6 +352,10 @@ def register(
     totp_uri = totp.provisioning_uri(
         name=user.username, issuer_name="ControleFinanceiro"
     )
+    # totp_secret é gerado uma única vez no cadastro e devolvido aqui apenas
+    # para o setup do 2FA (QR/manual). Trate-o como uso único: não é
+    # reexibido por nenhum outro endpoint (perfil não o expõe) e, após o
+    # setup, o usuário autentica com o código TOTP, não com o segredo.
     return UserResponse(
         id=user.id,
         username=user.username,
@@ -393,23 +453,61 @@ def logout(response: Response, session_token: Optional[str] = Cookie(None)):
 
 @app.get("/api/auth/status")
 def auth_status(session_token: Optional[str] = Cookie(None)):
-    """Indica se o cookie de sessão atual é válido.
+    """Indica se o cookie de sessão atual é válido e o papel do usuário.
 
     Com o cookie HttpOnly, o JavaScript não consegue mais ler o token;
-    este endpoint substitui essa verificação no frontend.
+    este endpoint substitui essa verificação no frontend. `is_admin` permite
+    à UI ocultar a gerência de tipos para quem não tem permissão (ISSUE 2).
     """
     try:
-        # authorization=None explícito: o default Header(None) é um objeto,
-        # não None — passar explícito evita AttributeError fora do DI do FastAPI.
-        verificar_autenticacao(authorization=None, session_token=session_token)
-        return {"authenticated": True}
+        username = verificar_autenticacao(session_token=session_token)
+        return {
+            "authenticated": True,
+            "is_admin": eh_admin(username),
+            "google_oauth_enabled": _google_oauth_ativo(),
+        }
     except HTTPException:
-        return {"authenticated": False}
+        return {
+            "authenticated": False,
+            "is_admin": False,
+            "google_oauth_enabled": _google_oauth_ativo(),
+        }
 
 
 class GoogleLoginRequest(BaseModel):
     code: str
     state: str
+
+
+@app.post("/api/auth/oauth/state")
+def oauth_state(request: Request):
+    """Emite um state (nonce) para o fluxo Google OAuth.
+
+    O state é aleatório, de uso único e vinculado à origin do request
+    (validada contra a allowlist de origens). Substitui o state fixo (origin)
+    que o frontend usava — um atacante não consegue pré-compor uma URL de
+    login com um state conhecido (mitiga login CSRF).
+    """
+    _verificar_limite_taxa(f"oauth-state:{_ip_do_cliente(request)}", 30, 900)
+
+    if not _google_oauth_ativo():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Login com Google desativado.",
+        )
+
+    origin = (request.headers.get("origin") or "").rstrip("/")
+    if origin not in _origens_permitidas():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Origem de redirecionamento inválida.",
+        )
+
+    state = secrets.token_urlsafe(32)
+    OAUTH_STATES[state] = (origin, time.time() + OAUTH_STATE_TTL_SECONDS)
+    if len(OAUTH_STATES) > 1000:
+        _podar_oauth_states()
+    return {"state": state}
 
 
 @app.post("/api/auth/login/google")
@@ -419,17 +517,31 @@ def login_google(
     response: Response,
     db: Session = Depends(get_db),
 ):
-    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+    if not _google_oauth_ativo():
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Google OAuth não configurado. Configure GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Login com Google desativado.",
         )
 
     _verificar_limite_taxa(f"google:{_ip_do_cliente(request)}", 10, 900)
 
-    # O redirect_uri nunca deve ser derivado de input arbitrário: valida a
-    # origem informada (state) contra uma allowlist fixa antes de montar a URL.
-    origin = payload.state.rstrip("/") if payload.state else ""
+    # O state é um nonce emitido por POST /api/auth/oauth/state (ISSUE 5):
+    # valida existência, uso único, expiração e a origin vinculada antes de
+    # montar o redirect_uri — o redirect_uri nunca é derivado de input
+    # arbitrário (evita roubo do authorization code / login CSRF).
+    _podar_oauth_states()
+    registro = OAUTH_STATES.pop(payload.state, None)  # uso único
+    if not registro:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="state inválido ou expirado. Refaça o login com o Google.",
+        )
+    origin, expira_em = registro
+    if expira_em <= time.time():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="state expirado. Refaça o login com o Google.",
+        )
     if origin not in _origens_permitidas():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -517,6 +629,15 @@ def login_google(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token inválido: expiração ausente.",
+        )
+
+    # email_verified (quando presente no id_token): contas Google com e-mail
+    # não verificado não devem conseguir criar conta (ISSUE 5).
+    email_verified = info.get("email_verified")
+    if email_verified is not None and str(email_verified).strip().lower() in ("false", "0", "no"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Conta Google com e-mail não verificado.",
         )
 
     email = info.get("email")

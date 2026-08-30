@@ -1,0 +1,12 @@
+# Contexto de build: exclui arquivos/pastas desnecessários ou sensíveis.
+# O Docker envia o conteúdo da pasta para o daemon ao construir; manter o
+# contexto enxuto deixa o build mais rápido e sem risco de vazar segredos.
+
+.git
+.venv
+data
+.env
+*.db
+__pycache__
+*.py[cod]
+estrutura.txt

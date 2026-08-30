@@ -9,13 +9,17 @@ from sqlalchemy.orm import sessionmaker
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/controle_financeiro.db")
-SECRET_KEY = os.getenv("SECRET_KEY")
-if not SECRET_KEY:
-    raise RuntimeError(
-        "SECRET_KEY não configurada. Configure a variável de ambiente SECRET_KEY."
-    )
+# SECRET_KEY é opcional e atualmente não utilizada (as sessões usam tokens
+# aleatórios em memória, sem assinatura). Mantida para uso futuro e
+# documentada no .env.example.
+SECRET_KEY = os.getenv("SECRET_KEY", "")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+# Habilita/desabilita o login com Google OAuth. Ausente = habilitado (1),
+# preservando o comportamento atual em instalações existentes.
+GOOGLE_OAUTH_ENABLED = os.getenv("GOOGLE_OAUTH_ENABLED", "1").strip().lower() in (
+    "1", "true", "yes", "on",
+)
 QUOTE_CACHE_TTL = int(os.getenv("QUOTE_CACHE_TTL", "3600"))
 
 # SQLite não cria diretórios automaticamente: garante que o diretório do

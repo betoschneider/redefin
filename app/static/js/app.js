@@ -287,6 +287,13 @@ function ativarAba(tabId) {
 // Inicia fluxo de login com Google: Authorization Code Flow (PKCE implícito via servidor)
 // Abre popup que redireciona para Google OAuth e recebe o authorization code via postMessage
 function iniciarLoginGoogle() {
+    // O servidor informa se o OAuth está ativo (via /api/auth/status); sem a
+    // confirmação, o botão permanece oculto (segurança por padrão).
+    if (window.GOOGLE_OAUTH_ENABLED !== true) {
+        alert('Login com Google desativado pelo administrador.');
+        return;
+    }
+
     const meta = document.querySelector('meta[name="google-client-id"]');
     const clientId = meta ? meta.getAttribute('content') : '';
     if (!clientId) {
@@ -294,18 +301,38 @@ function iniciarLoginGoogle() {
         return;
     }
 
-    const redirect = `${window.location.origin}/google_oauth_callback.html`;
-    const scope = 'openid email profile';
-    // O state carrega a origin para o backend montar o redirect_uri corretamente
-    const state = window.location.origin;
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?`
-        + `client_id=${encodeURIComponent(clientId)}`
-        + `&response_type=code`
-        + `&redirect_uri=${encodeURIComponent(redirect)}`
-        + `&scope=${encodeURIComponent(scope)}`
-        + `&state=${encodeURIComponent(state)}`;
+    // Abre o popup primeiro (dentro do gesto do usuário, evita bloqueio de
+    // popup) e navega para o Google após obter o state nonce do servidor.
+    const w = window.open('', 'google_oauth', 'width=600,height=700');
+    if (!w) {
+        alert('Habilite popups para usar o login com Google.');
+        return;
+    }
 
-    const w = window.open(authUrl, 'google_oauth', 'width=600,height=700');
+    // O state é um nonce aleatório emitido pelo servidor (ISSUE 5): uso
+    // único, com TTL, vinculado à origin — não é mais a origin fixa.
+    fetch('/api/auth/oauth/state', { method: 'POST' })
+        .then(resp => resp.json().then(d => ({ ok: resp.ok, d })))
+        .then(({ ok, d }) => {
+            if (!ok || !d.state) {
+                alert(d.detail || 'Não foi possível iniciar o login com Google.');
+                try { w.close(); } catch(e){}
+                return;
+            }
+            const redirect = `${window.location.origin}/google_oauth_callback.html`;
+            const scope = 'openid email profile';
+            const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?`
+                + `client_id=${encodeURIComponent(clientId)}`
+                + `&response_type=code`
+                + `&redirect_uri=${encodeURIComponent(redirect)}`
+                + `&scope=${encodeURIComponent(scope)}`
+                + `&state=${encodeURIComponent(d.state)}`;
+            try { w.location.href = authUrl; } catch(e){}
+        })
+        .catch(() => {
+            alert('Não foi possível iniciar o login com Google.');
+            try { w.close(); } catch(e){}
+        });
 
     function onMessage(e) {
         if (e.origin !== window.location.origin) return;
@@ -405,10 +432,15 @@ async function verificarAutenticacao() {
         const resp = await fetch("/api/auth/status");
         const data = await resp.json();
         const autenticado = data.authenticated === true;
+        // Papel do usuário atual (ISSUE 2): gerência de tipos só para admin
+        window.USUARIO_ATUAL = { is_admin: data.is_admin === true };
+        // Login Google habilitado? (variável GOOGLE_OAUTH_ENABLED + credenciais)
+        window.GOOGLE_OAUTH_ENABLED = data.google_oauth_enabled === true;
         if (autenticado) {
             authModal.classList.remove("active");
             carregarDadosDoAno();
             atualizarVisibilidadeBotoes();
+            atualizarVisibilidadeGerenciaTipos();
             // Se já autenticado, tenta mostrar foto do Google
             atualizarBotaoGoogle();
         } else {
@@ -651,6 +683,13 @@ function atualizarVisibilidadeBotoes() {
     const btnPerfilRedirect = document.getElementById("btn-perfil-redirect");
     if (btnPerfilRedirect) {
         btnPerfilRedirect.classList.toggle("hidden", !autenticado);
+    }
+
+    // Botão Login com Google: só aparece quando o servidor confirma que o
+    // OAuth está habilitado e configurado (GOOGLE_OAUTH_ENABLED + credenciais)
+    const btnGoogle = document.getElementById("btn-google-login");
+    if (btnGoogle) {
+        btnGoogle.classList.toggle("hidden", window.GOOGLE_OAUTH_ENABLED !== true);
     }
 }
 
@@ -3026,6 +3065,7 @@ async function carregarSettings() {
         popularSelectTipoCategoria();
         atualizarFiltroTipoOpcoes();
         atualizarFiltroCategoriaOpcoes();
+        atualizarVisibilidadeGerenciaTipos();
 
         // Atualiza o gráfico de categoria comparativo com as metas carregadas
         atualizarGraficoCategoriaComparativo();
@@ -3034,10 +3074,20 @@ async function carregarSettings() {
     }
 }
 
+// ISSUE 2: gerência de tipos (criar/editar/excluir) é restrita a
+// administradores; a UI oculta os controles para os demais usuários.
+function atualizarVisibilidadeGerenciaTipos() {
+    const podeGerenciar = !!(window.USUARIO_ATUAL && window.USUARIO_ATUAL.is_admin);
+    const form = document.getElementById("settings-tipo-form");
+    if (form) form.classList.toggle("hidden", !podeGerenciar);
+}
+
 function renderizarSettingsTipos() {
     const tbody = document.getElementById("settings-tipos-tbody");
     if (!tbody) return;
     tbody.innerHTML = "";
+
+    const podeGerenciar = !!(window.USUARIO_ATUAL && window.USUARIO_ATUAL.is_admin);
 
     if (settingsTipos.length === 0) {
         const tr = document.createElement("tr");
@@ -3056,7 +3106,7 @@ function renderizarSettingsTipos() {
 
         const tdNome = document.createElement("td");
         tdNome.className = "td-nome";
-        if (tipo.is_protegido) {
+        if (tipo.is_protegido || !podeGerenciar) {
             tdNome.innerHTML = `<span class="view-text">${escHtml(tipo.nome)}</span>`;
         } else {
             // Modo visualização: texto + botão editar (lápis)
@@ -3103,7 +3153,7 @@ function renderizarSettingsTipos() {
         tr.appendChild(tdProt);
 
         const tdAcoes = document.createElement("td");
-        if (!tipo.is_protegido) {
+        if (!tipo.is_protegido && podeGerenciar) {
             tdAcoes.innerHTML = `<button class="btn btn-danger-outline btn-xs settings-tipo-del" data-id="${tipo.id}" data-nome="${escHtml(tipo.nome)}"><i class="fa-solid fa-trash-can"></i></button>`;
             const delBtn = tdAcoes.querySelector(".settings-tipo-del");
             if (delBtn) {

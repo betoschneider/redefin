@@ -11,6 +11,14 @@ O projeto usa **FastAPI**, **SQLAlchemy**, **SQLite**, **Alembic** e frontend em
 
 ---
 
+## 📄 Licença e Origem
+
+O RedeFin é **software livre**: você pode **copiar, modificar e redistribuir** o projeto livremente, inclusive para uso comercial, sob a licença **MIT** (ver arquivo [`LICENSE`](LICENSE)).
+
+> **Nota de origem**: este projeto nasceu de uma **necessidade pessoal** de gestão financeira e foi criado via **vibe coding** — não é produto de empresa ou organização. Use, adapte e distribua como quiser.
+
+---
+
 ## Funcionalidades
 
 ### Autenticação
@@ -19,9 +27,9 @@ O projeto usa **FastAPI**, **SQLAlchemy**, **SQLite**, **Alembic** e frontend em
 - Configuração de 2FA via Google Authenticator, com QR Code e chave manual.
 - Login em duas etapas: senha e código TOTP.
 - Redefinição de senha validada por TOTP.
-- Login via Google OAuth por popup, com botão modernizado contendo o logo oficial do Google.
+- Login via Google OAuth por popup, com botão modernizado contendo o logo oficial do Google. Pode ser desabilitado com `GOOGLE_OAUTH_ENABLED=0` no `.env` (o botão some do login e os endpoints OAuth respondem desativado).
 - Exibição automática da foto de perfil do Google no botão quando o usuário está logado no navegador.
-- Sessão por cookie `session_token` e suporte a header `Authorization`.
+- Sessão por cookie `session_token` (`HttpOnly` + `SameSite=Lax`); o header `Authorization: Bearer` foi removido — autenticação é exclusivamente por cookie.
 - Limite opcional de criação de contas via variável `ACCOUNT_QUOTA`.
 
 ### Controle Financeiro
@@ -253,9 +261,11 @@ data/
 scripts/
   alembic_stamp_head_if_needed.py
   import_csv.py
-.env
+.env.example
 Dockerfile
 docker-compose.yml
+entrypoint.sh
+LICENSE
 pyproject.toml
 uv.lock
 ```
@@ -280,7 +290,7 @@ pip install uv
 Execute os comandos a partir da raiz do projeto:
 
 ```bash
-cd /home/beto/projetos/controle-financeiro
+cd redefin
 ```
 
 ### 3. Instalar dependências
@@ -288,6 +298,13 @@ cd /home/beto/projetos/controle-financeiro
 ```bash
 uv sync
 ```
+
+> O app sobe **sem** `.env` (padrões assumidos no código). Para configurar
+> Google OAuth, quota de contas, administradores etc., copie o exemplo e edite:
+>
+> ```bash
+> cp .env.example .env
+> ```
 
 ### 4. Aplicar migrations
 
@@ -319,13 +336,17 @@ uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8520
 
 ## Variáveis de Ambiente
 
-Crie ou edite `.env` conforme necessário:
+Crie ou edite `.env` conforme necessário (ou copie de `.env.example`):
 
 ```env
 DATABASE_URL=sqlite:///./data/controle_financeiro.db
-SECRET_KEY=sua_chave_secreta_aqui
+# SECRET_KEY: opcional e atualmente não utilizada (as sessões usam tokens
+# aleatórios em memória). Mantida para uso futuro.
+# SECRET_KEY=sua_chave_secreta_aqui
 GOOGLE_CLIENT_ID=seu_client_id_aqui
 GOOGLE_CLIENT_SECRET=seu_client_secret_aqui
+# Habilita/desabilita o login com Google OAuth: 1 (padrão) ou 0.
+GOOGLE_OAUTH_ENABLED=1
 QUOTE_CACHE_TTL=3600
 ACCOUNT_QUOTA=0
 # ALLOWED_ORIGINS=https://fin.btoplay.com,https://outro.dominio.com
@@ -337,21 +358,30 @@ ACCOUNT_QUOTA=0
 #   1: força Secure (use quando o app estiver atrás de proxy TLS sem --proxy-headers)
 #   0: nunca Secure (apenas desenvolvimento local)
 COOKIE_SECURE=auto
+# ADMIN_USERNAMES=usuario_admin
+#   Usuários com papel de administrador (separados por vírgula). Restringem a
+#   criação/edição/remoção de tipos compartilhados (ver seção de Segurança).
+#   Sem esta variável, ninguém gerencia tipos — os padrão já existem via seed.
 ```
 
 Notas:
 
+- O app funciona **sem `.env`** (padrões em código). Para configurar opções, copie o exemplo: `cp .env.example .env`.
 - `ACCOUNT_QUOTA=0` significa sem limite de criação de contas. Qualquer valor positivo limita o número máximo de usuários.
 - `DATABASE_URL` é opcional no modo local; há fallback no código.
 - `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` são usados no login Google OAuth (Authorization Code Flow).
   Obtenha ambos no [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
+- `GOOGLE_OAUTH_ENABLED`: `1` (padrão, ausente = habilitado) liga o login com Google; `0` desliga — o botão some do login e os endpoints OAuth respondem "desativado". Mesmo com `1`, o botão só aparece se as credenciais (`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`) estiverem configuradas.
 - `QUOTE_CACHE_TTL` define o cache de cotações do `yfinance` em segundos.
 - `COOKIE_SECURE` controla o atributo `Secure` do cookie de sessão (ver comentário no `.env`). O cookie já é `HttpOnly` e `SameSite=Lax` por padrão.
+- `ADMIN_USERNAMES` define quais usuários podem gerenciar tipos (criar/editar/excluir). Sem ela, nenhum usuário gerencia tipos.
 - `ALLOWED_ORIGINS` permite adicionar domínios extras ao CORS e à allowlist do `redirect_uri` do OAuth Google sem alterar código. Lembre de também cadastrar o `redirect_uri` (`https://seu.dominio/google_oauth_callback.html`) no [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
 
 ---
 
 ## Docker
+
+Requisito: **docker compose 2.24+** (necessário para o `.env` opcional).
 
 O `docker-compose.yml` monta:
 
@@ -360,26 +390,26 @@ O `docker-compose.yml` monta:
 As migrations são aplicadas automaticamente no startup da aplicação (dentro do container),
 então um banco do zero é criado com o schema completo via alembic.
 
-> **Permissões do volume**: o container roda como usuário não-root de **UID 1000**.
-> O diretório `./data` no host precisa ser gravável por esse UID. Se o dono do
-> `./data` no host tiver outro UID, ajuste com:
->
-> ```bash
-> sudo chown -R 1000:1000 ./data
-> ```
->
-> (O `chmod 775 ./data` do passo abaixo só é suficiente se o UID 1000 for dono
-> ou estiver no grupo do diretório.)
+> **Permissões do volume**: o container corrige sozinho o dono de `/app/data`
+> (UID 1000) na subida, via `entrypoint.sh` — **nenhum passo manual de `chown`**
+> é necessário, mesmo num clone novo.
 
-Subir a aplicação:
+Subir a aplicação (funciona num clone novo, sem configuração):
 
 ```bash
-mkdir -p ./data
-chmod 775 ./data
 docker compose up --build -d
 ```
 
 Acesse: `http://127.0.0.1:8520`
+
+> Sem `.env`, o app sobe com os padrões: Google OAuth fica oculto, quota sem
+> limite e `COOKIE_SECURE=auto`. Para habilitar OAuth/administradores, crie o
+> arquivo antes de subir:
+>
+> ```bash
+> cp .env.example .env
+> docker compose up --build -d
+> ```
 
 Parar:
 
@@ -391,13 +421,7 @@ docker compose down
 
 ## Testes e Validações
 
-Rodar a suíte de testes:
-
-```bash
-PYTHONPATH=. uv run pytest -q
-```
-
-Verificar sintaxe Python:
+O projeto ainda **não possui testes automatizados**. Para verificar a sintaxe do código Python:
 
 ```bash
 uv run python -m compileall app
@@ -503,18 +527,28 @@ uv run python -m compileall app
 
 4. **Mensagens de erro vazando detalhes internos**: erros do fluxo Google OAuth são logados no servidor e devolvidos com mensagem genérica ao client.
 
+5. **Injeção de fórmula em CSV (CSV injection)**: exportações de lançamentos e carteira neutralizam células que começam com `=`, `+`, `-` ou `@` (prefixo `'`), impedindo fórmulas maliciosas ao abrir no Excel/LibreOffice.
+
+6. **Taxonomia de tipos global alterável por qualquer usuário**: criação/edição/remoção de tipos agora é restrita a administradores (`ADMIN_USERNAMES`); a remoção valida lançamentos de **todos** os usuários e o rename propaga para os lançamentos existentes (as transações guardam o nome como string).
+
+7. **Headers de segurança ausentes**: todas as respostas agora enviam `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` e `Content-Security-Policy` (scripts apenas de `self` + Chart.js CDN; o callback do Google OAuth foi extraído para arquivo local para dispensar `'unsafe-inline'` em scripts).
+
+8. **CSV aceitava `NaN`/`Infinito`**: uploads de lançamentos rejeitam valores não-finitos com mensagem clara; importação da carteira trata como inválido.
+
 ### Boas Práticas de Segurança
 
 - **Hash de Senha com `bcrypt`**: as funções `hash_password` e `verify_password` utilizam `bcrypt`.
-- **Autenticação de Dois Fatores (2FA) com TOTP**: registro, login em dois passos e redefinição de senha usam `pyotp`.
+- **Autenticação de Dois Fatores (2FA) com TOTP**: registro, login em dois passos e redefinição de senha usam `pyotp`. O `totp_secret` é gerado uma única vez no cadastro e devolvido apenas para o setup (uso único; nenhum outro endpoint o reexpõe).
+- **OAuth com `state` nonce**: o `state` do Google é um nonce aleatório emitido pelo servidor (`POST /api/auth/oauth/state`), de uso único e com TTL, vinculado à origin permitida — mitiga login CSRF. O `email_verified` do Google é checado quando presente.
+- **Autenticação apenas por cookie**: o header `Authorization: Bearer` foi removido — reduz a superfície caso um token vaze para logs/referrers.
 - **Validação de Entrada com Pydantic** em todos os endpoints.
 - **Quota de Contas** via `ACCOUNT_QUOTA` para evitar esgotamento de recursos.
 - **Escopo por usuário**: todas as consultas (incluindo o novo `investment_history`) são filtradas por `owner_id` (sem IDOR).
 - **Autorização em todas as rotas**: todo endpoint de dados depende de `verificar_autenticacao`.
 
-### Nota sobre sessões e limite de taxa em memória
+### Nota sobre sessões, limite de taxa e state OAuth em memória
 
-Ambos vivem em memória: sessões são perdidas no restart e o limite de taxa é por processo. Para múltiplas instâncias ou maior robustez, migrar para Redis (ex.: `slowapi`/`fastapi-limiter` + sessões em Redis/PostgreSQL).
+Sessões, limite de taxa e o `state` do OAuth vivem em memória: sessões são perdidas no restart e o limite de taxa é por processo. Para múltiplas instâncias ou maior robustez, migrar para Redis (ex.: `slowapi`/`fastapi-limiter` + sessões em Redis/PostgreSQL).
 
 ---
 

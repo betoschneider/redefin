@@ -5,25 +5,6 @@
   <title>Google OAuth Callback</title>
 </head>
 <body>
-<script>
-(function(){
-  try {
-    // Extrai o authorization code da query string (?code=...)
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
-    const state = params.get('state');
-    if (window.opener && code) {
-      window.opener.postMessage(
-        { type: 'google-auth-code', code: code, state: state },
-        window.location.origin
-      );
-    }
-  } catch (e) {
-    console.error('callback error', e);
-  }
-  // Fecha o popup
-  try { window.close(); } catch(e){}
-})();
-</script>
+<script src="/google_oauth_callback.js"></script>
 </body>
 </html>

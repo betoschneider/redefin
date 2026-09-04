@@ -19,7 +19,7 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Versão dos assets para cache-busting: incremente manualmente ao deploy (ex: v1 -> v2) -->
-    <link rel="stylesheet" href="css/style.css?v=38">
+    <link rel="stylesheet" href="css/style.css?v=39">
 </head>
 
 <body>
@@ -372,62 +372,50 @@
 
         <!-- Carteira de Investimento -->
         <div id="tab-carteira" class="tab-content investment-page">
-            <section class="metrics-grid investment-metrics">
-                <div class="metric-card glass">
-                    <div class="metric-icon income"><i class="fa-solid fa-sack-dollar"></i></div>
-                    <div class="metric-info">
-                        <span class="metric-label">Patrimônio Total</span>
-                        <h2 class="metric-value" id="inv-total">R$ 0,00</h2>
-                        <span id="inv-total-yield" class="metric-delta" style="font-size:0.9rem;" title=""></span>
-                        <span id="inv-total-delta-latest" class="metric-delta" style="font-size:0.9rem;" title=""></span>
+            <div class="carteira-overview">
+                <!-- Cards de métricas empilhados verticalmente (coluna) -->
+                <section class="metrics-grid investment-metrics">
+                    <div class="metric-card glass">
+                        <div class="metric-icon income"><i class="fa-solid fa-sack-dollar"></i></div>
+                        <div class="metric-info">
+                            <span class="metric-label">Patrimônio Total</span>
+                            <h2 class="metric-value" id="inv-total">R$ 0,00</h2>
+                            <span id="inv-total-yield" class="metric-delta" style="font-size:0.9rem;" title=""></span>
+                            <span id="inv-total-delta-latest" class="metric-delta" style="font-size:0.9rem;" title=""></span>
+                        </div>
                     </div>
-                </div>
-                <div class="metric-card glass">
-                    <div class="metric-icon projection"><i class="fa-solid fa-layer-group"></i></div>
-                    <div class="metric-info">
-                        <span class="metric-label">Ativos Monitorados</span>
-                        <h2 class="metric-value" id="inv-assets-count">0</h2>
+                    <div class="metric-card glass">
+                        <div class="metric-icon projection"><i class="fa-solid fa-layer-group"></i></div>
+                        <div class="metric-info">
+                            <span class="metric-label">Ativos Monitorados</span>
+                            <h2 class="metric-value" id="inv-assets-count">0</h2>
+                        </div>
                     </div>
-                </div>
-                <div class="metric-card glass">
-                    <div class="metric-icon reserve"><i class="fa-solid fa-bullseye"></i></div>
-                    <div class="metric-info">
-                        <span class="metric-label">Soma das Metas</span>
-                        <h2 class="metric-value" id="inv-target-sum">0%</h2>
+                    <div class="metric-card glass">
+                        <div class="metric-icon reserve"><i class="fa-solid fa-bullseye"></i></div>
+                        <div class="metric-info">
+                            <span class="metric-label">Soma das Metas</span>
+                            <h2 class="metric-value" id="inv-target-sum">0%</h2>
+                        </div>
                     </div>
-                </div>
-            </section>
+                </section>
 
-            <!-- Evolução da Carteira -->
-            <section class="chart-card glass" style="margin-top:16px;">
-                <div class="evolucao-header">
-                    <h3><i class="fa-solid fa-chart-line"></i> Evolução da Carteira</h3>
-                    <div class="period-filter" id="evolucao-filtros">
-                        <button type="button" class="period-btn" data-period="6">6M</button>
-                        <button type="button" class="period-btn active" data-period="12">12M</button>
-                        <button type="button" class="period-btn" data-period="24">24M</button>
-                        <button type="button" class="period-btn" data-period="all">Tudo</button>
-                    </div>
-                </div>
-                <div class="evolucao-charts-wrapper" style="display: flex; flex-direction: column; gap: 24px; margin-top: 16px;">
-                    <div class="evolucao-chart-subblock">
-                        <h4 style="margin-bottom: 8px; font-size: 14px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
-                            <i class="fa-solid fa-percent" style="color: #f39c12;"></i> Yield (%)
-                        </h4>
-                        <div class="chart-container" style="height: 250px;">
-                            <canvas id="chart-evolucao-yield"></canvas>
+                <!-- Evolução da Carteira: Yield (%) e Patrimônio no mesmo gráfico, ao lado dos cards -->
+                <section class="chart-card glass carteira-evolucao-card">
+                    <div class="evolucao-header">
+                        <h3><i class="fa-solid fa-chart-line"></i> Evolução da Carteira</h3>
+                        <div class="period-filter" id="evolucao-filtros">
+                            <button type="button" class="period-btn" data-period="6">6M</button>
+                            <button type="button" class="period-btn active" data-period="12">12M</button>
+                            <button type="button" class="period-btn" data-period="24">24M</button>
+                            <button type="button" class="period-btn" data-period="all">Tudo</button>
                         </div>
                     </div>
-                    <div class="evolucao-chart-subblock">
-                        <h4 style="margin-bottom: 8px; font-size: 14px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
-                            <i class="fa-solid fa-wallet" style="color: #2ecc71;"></i> Patrimônio
-                        </h4>
-                        <div class="chart-container" style="height: 250px;">
-                            <canvas id="chart-evolucao-patrimonio"></canvas>
-                        </div>
+                    <div class="chart-container carteira-evolucao-chart" style="height: 340px;">
+                        <canvas id="chart-evolucao"></canvas>
                     </div>
-                </div>
-            </section>
+                </section>
+            </div>
 
             <section class="investment-grid">
                 <div class="chart-card glass">
@@ -870,7 +858,7 @@
     </div>
 
     <!-- Scripts da Aplicação -->
-    <script src="js/app.js?v=38"></script>
+    <script src="js/app.js?v=39"></script>
 </body>
 
 </html>

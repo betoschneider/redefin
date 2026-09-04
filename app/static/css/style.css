@@ -937,6 +937,25 @@ body.light-theme.investment-mode .glass:not(.app-header) {
     gap: 20px;
 }
 
+/* Cards de métricas empilhados em coluna, com o gráfico de evolução ao lado */
+.carteira-overview {
+    display: grid;
+    grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+}
+
+.metrics-grid.investment-metrics {
+    grid-template-columns: 1fr;
+    gap: 16px;
+}
+
+@media (max-width: 1024px) {
+    .carteira-overview {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* Variação visual sutíl no modo investimento para os cards */
 body.investment-mode .investment-page .glass {
     border-left: 2px solid rgba(52, 152, 219, 0.15);

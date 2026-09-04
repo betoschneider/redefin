@@ -85,6 +85,11 @@ Abaixo da tabela, com gráficos de:
 - Filtro para exibir apenas valores efetivados.
 - Seletor de tipo a explodir (Receita, Despesa, Investimento ou Reserva).
 
+#### Gráfico Categorias: Meta vs % Remuneração e Desvio
+
+- Barras horizontais por categoria, comparando o percentual gasto sobre a remuneração com a meta configurada (desvio em pontos percentuais, com os tipos de despesa à frente dos demais).
+- Tooltip com as informações na ordem: **Desvio**, **Total** (valor e % da remuneração) e **Meta**.
+
 #### Outras Funcionalidades
 
 - Propagação de valores do mês atual para meses seguintes.
@@ -113,6 +118,7 @@ A área da carteira possui uma leve variação visual (fundo sutilmente azulado 
   - `metric-delta-lastest`: diferença percentual entre o valor atual e o valor registrado na consulta anterior (tooltip: data da consulta anterior).
 - Total de ativos monitorados.
 - Soma das metas.
+- Os três cards (**Patrimônio Total**, **Ativos Monitorados** e **Soma das Metas**) ficam **empilhados verticalmente em uma coluna**, com o gráfico de evolução ao lado (veja abaixo).
 
 #### Tabela de Ativos
 
@@ -130,9 +136,11 @@ A área da carteira possui uma leve variação visual (fundo sutilmente azulado 
 #### Evolução da Carteira
 
 - **Histórico diário**: a cada consulta à API de portfólio é gravada uma linha por dia (tabela `investment_history`) com patrimônio total, yield (%) e data/hora. Se houver mais de uma consulta no mesmo dia, apenas a mais recente é mantida (upsert).
-- **Gráficos verticais alinhados**: dois gráficos de linha dispostos verticalmente (primeiro **Yield %**, em seguida **Patrimônio R$**) compartilhando o filtro de período (**6M / 12M / 24M / Tudo**). Rótulos dos eixos X e Y são suprimidos para manter a legibilidade com grande volume de dados, e a movimentação do cursor é sincronizada entre ambos para exibição simultânea de tooltips no mesmo ponto temporal.
-- **Estado vazio**: enquanto não houver consultas, os gráficos exibem uma mensagem informativa.
-- Os gráficos são renderizados abaixo das métricas e atualizados ao ativar a aba, no refresh de cotações e após aportes/importações.
+- **Gráfico único com Yield (%) e Patrimônio**: as duas séries são exibidas sobrepostas no mesmo gráfico de linha, compartilhando o eixo X. Cada série usa seu próprio eixo Y (Yield à esquerda e Patrimônio à direita) e todos os eixos permanecem **sem rótulos** para manter a legibilidade com grande volume de dados. O tooltip mostra as duas séries no mesmo ponto temporal.
+- **Filtro de período**: **6M / 12M / 24M / Tudo**, aplicado ao gráfico.
+- **Estado vazio**: enquanto não houver consultas, o gráfico exibe uma mensagem informativa.
+- **Layout**: o gráfico fica ao lado da coluna de cards de métricas; em telas menores, cards e gráfico são empilhados verticalmente.
+- O gráfico é atualizado ao ativar a aba, no refresh de cotações e após aportes/importações.
 
 #### Gerenciamento de Carteira
 

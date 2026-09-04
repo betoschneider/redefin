@@ -2519,8 +2519,7 @@ function colorForGroup(group) {
 // Evolução da Carteira (histórico diário: 1 ponto por dia)
 // ===================================================================
 
-let chartEvolucaoYieldInstancia = null;
-let chartEvolucaoPatrimonioInstancia = null;
+let chartEvolucaoInstancia = null;
 let evolucaoData = [];
 let evolucaoPeriodo = "12";
 
@@ -2536,20 +2535,14 @@ async function carregarEvolucao() {
 }
 
 function renderizarEvolucao() {
-    const canvasYield = document.getElementById("chart-evolucao-yield");
-    const canvasPatrimonio = document.getElementById("chart-evolucao-patrimonio");
-    if (!canvasYield || !canvasPatrimonio || typeof Chart === "undefined") return;
+    const canvas = document.getElementById("chart-evolucao");
+    if (!canvas || typeof Chart === "undefined") return;
 
-    const ctxYield = canvasYield.getContext("2d");
-    const ctxPatrimonio = canvasPatrimonio.getContext("2d");
+    const ctx = canvas.getContext("2d");
 
-    if (chartEvolucaoYieldInstancia) {
-        chartEvolucaoYieldInstancia.destroy();
-        chartEvolucaoYieldInstancia = null;
-    }
-    if (chartEvolucaoPatrimonioInstancia) {
-        chartEvolucaoPatrimonioInstancia.destroy();
-        chartEvolucaoPatrimonioInstancia = null;
+    if (chartEvolucaoInstancia) {
+        chartEvolucaoInstancia.destroy();
+        chartEvolucaoInstancia = null;
     }
 
     let dados = evolucaoData || [];
@@ -2563,22 +2556,19 @@ function renderizarEvolucao() {
     const textColor = corTextoTema();
     const gridColor = getComputedStyle(document.body).getPropertyValue("--border-color").trim() || "rgba(128, 128, 128, 0.15)";
 
-    // Estado vazio: os gráficos se preenchem conforme as consultas à carteira
+    // Estado vazio: o gráfico se preenche conforme as consultas à carteira
     if (dados.length === 0) {
-        [canvasYield, canvasPatrimonio].forEach(canvas => {
-            const ctx = canvas.getContext("2d");
-            const rect = canvas.getBoundingClientRect();
-            const dpr = window.devicePixelRatio || 1;
-            canvas.width = Math.max(1, Math.round(rect.width * dpr));
-            canvas.height = Math.max(1, Math.round(rect.height * dpr));
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            ctx.clearRect(0, 0, rect.width, rect.height);
-            ctx.font = "14px Outfit, sans-serif";
-            ctx.fillStyle = corTextoSecundarioTema();
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.fillText("Sem dados ainda — as consultas à carteira aparecerão aqui.", rect.width / 2, rect.height / 2);
-        });
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.max(1, Math.round(rect.width * dpr));
+        canvas.height = Math.max(1, Math.round(rect.height * dpr));
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, rect.width, rect.height);
+        ctx.font = "14px Outfit, sans-serif";
+        ctx.fillStyle = corTextoSecundarioTema();
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("Sem dados ainda — as consultas à carteira aparecerão aqui.", rect.width / 2, rect.height / 2);
         return;
     }
 
@@ -2590,14 +2580,16 @@ function renderizarEvolucao() {
         return dt.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
     });
 
-    // Gráfico 1: Yield (%)
-    chartEvolucaoYieldInstancia = new Chart(ctxYield, {
+    // Gráfico único: Yield (%) e Patrimônio sobrepostos no mesmo eixo X,
+    // com eixos Y independentes e sem rótulos
+    chartEvolucaoInstancia = new Chart(ctx, {
         type: "line",
         data: {
             labels,
             datasets: [
                 {
                     label: "Yield (%)",
+                    yAxisID: "yYield",
                     data: dados.map(d => (d.yield === null || d.yield === undefined ? null : d.yield)),
                     borderColor: "#f39c12",
                     backgroundColor: "rgba(243, 156, 18, 0.15)",
@@ -2609,57 +2601,10 @@ function renderizarEvolucao() {
                     pointBackgroundColor: "#f39c12",
                     pointBorderColor: "#f39c12",
                     pointBorderWidth: 0
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: {
-                mode: "index",
-                intersect: false
-            },
-            plugins: {
-                legend: {
-                    position: "top",
-                    labels: { color: textColor, font: { family: "Outfit", size: 12 } }
                 },
-                tooltip: {
-                    mode: "index",
-                    intersect: false,
-                    callbacks: {
-                        label: function(context) {
-                            let label = context.dataset.label || "";
-                            if (label) label += ": ";
-                            const valor = context.parsed.y;
-                            if (valor === null) return label;
-                            return label + `${valor >= 0 ? "+" : ""}${formatNumber(valor, 2)}%`;
-                        }
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    grid: { color: gridColor },
-                    ticks: { display: false }
-                },
-                y: {
-                    position: "left",
-                    grid: { color: gridColor },
-                    ticks: { display: false }
-                }
-            }
-        }
-    });
-
-    // Gráfico 2: Patrimônio (R$)
-    chartEvolucaoPatrimonioInstancia = new Chart(ctxPatrimonio, {
-        type: "line",
-        data: {
-            labels,
-            datasets: [
                 {
                     label: "Patrimônio",
+                    yAxisID: "yPatrimonio",
                     data: dados.map(d => d.value),
                     borderColor: "#2ecc71",
                     backgroundColor: "rgba(46, 204, 113, 0.25)",
@@ -2695,7 +2640,10 @@ function renderizarEvolucao() {
                             if (label) label += ": ";
                             const valor = context.parsed.y;
                             if (valor === null) return label;
-                            return label + formatarMoeda(valor);
+                            if (context.dataset.yAxisID === "yPatrimonio") {
+                                return label + formatarMoeda(valor);
+                            }
+                            return label + `${valor >= 0 ? "+" : ""}${formatNumber(valor, 2)}%`;
                         }
                     }
                 }
@@ -2705,48 +2653,21 @@ function renderizarEvolucao() {
                     grid: { color: gridColor },
                     ticks: { display: false }
                 },
-                y: {
+                yYield: {
+                    type: "linear",
                     position: "left",
                     grid: { color: gridColor },
+                    ticks: { display: false }
+                },
+                yPatrimonio: {
+                    type: "linear",
+                    position: "right",
+                    grid: { drawOnChartArea: false },
                     ticks: { display: false }
                 }
             }
         }
     });
-
-    function syncChartHover(sourceChart, targetChart, e) {
-        if (!sourceChart || !targetChart) return;
-        const points = sourceChart.getElementsAtEventForMode(e, "index", { intersect: false }, true);
-        if (points.length) {
-            const idx = points[0].index;
-            const targetMeta = targetChart.getDatasetMeta(0);
-            if (targetMeta && targetMeta.data[idx]) {
-                targetChart.setActiveElements([{ datasetIndex: 0, index: idx }]);
-                targetChart.tooltip.setActiveElements([{ datasetIndex: 0, index: idx }], {
-                    x: points[0].element.x,
-                    y: targetMeta.data[idx].y
-                });
-                targetChart.update("none");
-            }
-        } else {
-            targetChart.setActiveElements([]);
-            targetChart.tooltip.setActiveElements([], { x: 0, y: 0 });
-            targetChart.update("none");
-        }
-    }
-
-    function clearChartHover(targetChart) {
-        if (!targetChart) return;
-        targetChart.setActiveElements([]);
-        targetChart.tooltip.setActiveElements([], { x: 0, y: 0 });
-        targetChart.update("none");
-    }
-
-    canvasYield.onmousemove = (e) => syncChartHover(chartEvolucaoYieldInstancia, chartEvolucaoPatrimonioInstancia, e);
-    canvasYield.onmouseleave = () => clearChartHover(chartEvolucaoPatrimonioInstancia);
-
-    canvasPatrimonio.onmousemove = (e) => syncChartHover(chartEvolucaoPatrimonioInstancia, chartEvolucaoYieldInstancia, e);
-    canvasPatrimonio.onmouseleave = () => clearChartHover(chartEvolucaoYieldInstancia);
 }
 
 function configurarFiltrosEvolucao() {
@@ -3706,8 +3627,8 @@ function renderGraficoCategoriaComparativo(canvas, data) {
                             const valorPercentual = cat.valor_percentual_remuneracao || 0;
                             const lines = [];
                             lines.push(` Desvio: ${desvio >= 0 ? '+' : ''}${desvio.toFixed(1)}pp`);
+                            lines.push(` Total: ${formatarMoeda(valorCategoria)} (${valorPercentual.toFixed(1)}%)`);
                             lines.push(` Meta: ${meta.toFixed(1)}%`);
-                            lines.push(` Total da Categoria: ${formatarMoeda(valorCategoria)} (${valorPercentual.toFixed(1)}%)`);
                             return lines;
                         }
                     }

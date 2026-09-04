@@ -80,8 +80,8 @@ Todos os filtros e ações ficam na mesma barra, acima da tabela:
 
 Abaixo da tabela, com gráficos de:
 
-- **Proporção por Categoria** (rosca).
-- **Ranking de Itens** (barras horizontais).
+- **Proporção por Categoria** (barras horizontais, com categorias ordenadas por valor decrescente e eixo X suprimido para evitar poluição visual).
+- **Ranking de Itens** (barras horizontais, com eixo X suprimido).
 - Filtro para exibir apenas valores efetivados.
 - Seletor de tipo a explodir (Receita, Despesa, Investimento ou Reserva).
 
@@ -130,9 +130,9 @@ A área da carteira possui uma leve variação visual (fundo sutilmente azulado 
 #### Evolução da Carteira
 
 - **Histórico diário**: a cada consulta à API de portfólio é gravada uma linha por dia (tabela `investment_history`) com patrimônio total, yield (%) e data/hora. Se houver mais de uma consulta no mesmo dia, apenas a mais recente é mantida (upsert).
-- **Gráfico misto**: patrimônio em área (eixo esquerdo, R$) + yield em linha (eixo direito, %), com filtro de período **6M / 12M / 24M / Tudo** aplicado no client.
-- **Estado vazio**: enquanto não houver consultas, o gráfico exibe uma mensagem informativa.
-- O gráfico é renderizado abaixo das métricas e atualizado ao ativar a aba, no refresh de cotações e após aportes/importações.
+- **Gráficos verticais alinhados**: dois gráficos de linha dispostos verticalmente (primeiro **Yield %**, em seguida **Patrimônio R$**) compartilhando o filtro de período (**6M / 12M / 24M / Tudo**). Rótulos dos eixos X e Y são suprimidos para manter a legibilidade com grande volume de dados, e a movimentação do cursor é sincronizada entre ambos para exibição simultânea de tooltips no mesmo ponto temporal.
+- **Estado vazio**: enquanto não houver consultas, os gráficos exibem uma mensagem informativa.
+- Os gráficos são renderizados abaixo das métricas e atualizados ao ativar a aba, no refresh de cotações e após aportes/importações.
 
 #### Gerenciamento de Carteira
 
